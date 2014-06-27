@@ -22,7 +22,7 @@
 #include "mdss_mdp.h"
 #include "mdss_panel.h"
 #include "mdss_debug.h"
-#include "mdss_mdp_trace.h"
+#include <trace/mdss_mdp_trace.h>
 
 #if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
 extern int has_dsv_f;
