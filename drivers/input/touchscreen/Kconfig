@@ -999,6 +999,30 @@ config SECURE_TOUCH
 
 	  If unsure, say N.
 
+config TOUCHSCREEN_APS_MIT200
+	bool "LGDisplay touchscreen with melfas"
+	depends on I2C
+	default n
+	help
+	  Say Y here to enable support for Melfas Touch driver
+	  series touchscreen controller.
+
+config TOUCHSCREEN_LGE_TOUCHCORE
+	bool "LGE Touch Core driver"
+	depends on I2C
+	default n
+	help
+	 Say Y here if you use lge touch core
+	 if unsure, say N
+
+config TOUCHSCREEN_LGE_MELFAS
+	bool "Melfas MIT-200 based on LGE Touch Core driver"
+	depends on I2C && TOUCHSCREEN_LGE_TOUCHCORE
+	default n
+	help
+         Say Y here if you have a Mefas MIT-200 I2C touchscreen
+         connected to your system.
+
 config TOUCHSCREEN_GT9XX
 	bool "Goodix touchpanel GT9xx series"
 	depends on I2C
