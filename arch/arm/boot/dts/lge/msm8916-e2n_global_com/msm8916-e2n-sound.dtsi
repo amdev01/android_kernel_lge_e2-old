@@ -1,0 +1,67 @@
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+	sound {
+		compatible = "qcom,msm8x16-audio-codec";
+		qcom,model = "msm8x16-snd-card";
+		qcom,msm-snd-card-id = <0>;
+		qcom,msm-codec-type = "internal";
+		qcom,msm-ext-pa = "primary";
+		qcom,msm-mclk-freq = <9600000>;
+		qcom,msm-mbhc-hphl-swh = <1>;	/*LGE AUDIO BSP MODIFIED 0 to 1*/
+		qcom,msm-mbhc-gnd-swh = <0>;
+		qcom,msm-hs-micbias-type = "internal";
+		qcom,audio-routing =
+			"RX_BIAS", "MCLK",
+			"SPK_RX_BIAS", "MCLK",
+			"INT_LDO_H", "MCLK",
+			"MIC BIAS External", "Handset Mic",
+			"MIC BIAS Internal2", "Headset Mic",
+			"MIC BIAS External", "Secondary Mic",
+			"AMIC1", "MIC BIAS External",
+			"AMIC2", "MIC BIAS Internal2",
+			"AMIC3", "MIC BIAS External";
+		pinctrl-names = "cdc_lines_act",
+				"cdc_lines_sus",
+				"cdc_lines_sec_ext_act",
+				"cdc_lines_sec_ext_sus",
+				"cross_conn_det_act",
+				"cross_conn_det_sus";
+		pinctrl-0 = <&cdc_pdm_lines_act>;
+		pinctrl-1 = <&cdc_pdm_lines_sus>;
+		pinctrl-2 = <&cdc_pdm_lines_act &cdc_ext_pa_act
+						&cdc_ext_pa_ws_act>;
+		pinctrl-3 = <&cdc_pdm_lines_sus &cdc_ext_pa_sus
+						&cdc_ext_pa_ws_sus>;
+		pinctrl-4 = <&cross_conn_det_act>;
+		pinctrl-5 = <&cross_conn_det_sus>;
+		//qcom,cdc-us-euro-gpios = <&msm_gpio 120 0>; /*LGE AUDIO BSP MODIFIED do not use*/
+	};
+};
+
+&i2c_4 {
+	maxim_max14688@15 {
+		compatible = "maxim,max14688";
+		status = "ok";
+		reg = <0x15>;
+		interrupt-parent = <&msm_gpio>;
+		interrupts = <110 0x3 114 0x3>;
+		max14688,gpio_detect = <&msm_gpio 110 0x00>; /* EAR_SENSE */
+		max14688,gpio_int = <&msm_gpio 114 0x00>; /* EAR_KEY - insertion/removal IRQ */
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&hs_max14688_det_active &hs_max14688_int_active>;
+		pinctrl-1 = <&hs_max14688_det_sleep &hs_max14688_int_sleep>;
+		qcom,switch-vadc = <&pm8916_vadc>;
+		qcom,vadc-channel = <0x10>; /* MPP 2 */
+	};
+};

@@ -1,0 +1,24 @@
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc{
+
+
+	qcom,clock-a7@0b011050	{
+		lge,factory-bin =
+			<          0 0>,
+			<  200000000 1>,
+			<  400000000 2>,
+			<  533333000 3>,
+			<  800000000 4>;
+	};
+};

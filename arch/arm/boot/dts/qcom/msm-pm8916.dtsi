@@ -42,11 +42,6 @@
 				linux,code = <116>;
 			};
 
-			qcom,pon_2 {
-				qcom,pon-type = <1>;
-				qcom,pull-up = <1>;
-				linux,code = <114>;
-			};
 		};
 
 		pm8916_mpps: mpps {
@@ -215,8 +210,12 @@
 			qcom,warm-bat-mv = <4100>;
 			qcom,ibatmax-warm-ma = <360>;
 			qcom,ibatmax-cool-ma = <360>;
+/* [LGE_UPDATE_S] */
+/*
 			qcom,batt-hot-percentage = <25>;
 			qcom,batt-cold-percentage = <80>;
+*/
+/* [LGE_UPDATE_E] */
 			qcom,tchg-mins = <232>;
 			qcom,resume-soc = <99>;
 			qcom,chg-vadc = <&pm8916_vadc>;
