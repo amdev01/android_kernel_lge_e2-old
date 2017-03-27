@@ -50,6 +50,7 @@
 #define WCD9XXX_MBHC_DEF_RLOADS 5
 #define DEFAULT_MCLK_RATE 9600000
 
+extern bool is_pmic_rev_2;
 static int msm_btsco_rate = BTSCO_RATE_8KHZ;
 static int msm_btsco_ch = 1;
 
@@ -66,7 +67,7 @@ static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 static struct wcd_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
 	.calibration = NULL,
-	.detect_extn_cable = true,
+	.detect_extn_cable = false,		//           
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = false,
@@ -1058,6 +1059,37 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	btn_low = btn_cfg->_v_btn_low;
 	btn_high = btn_cfg->_v_btn_high;
 
+#if 1
+	/*       
+                                                              
+                                       
+  */
+	if (is_pmic_rev_2) {
+		btn_low[0] = 0;		/* Hook-Key */
+		btn_high[0] = 84;
+		btn_low[1] = 85;	/* Volume Up */
+		btn_high[1] = 200;
+		btn_low[2] = 201;	/* Volume Dn */
+		btn_high[2] = 384;
+		btn_low[3] = 384;
+		btn_high[3] = 384;
+		btn_low[4] = 384;
+		btn_high[4] = 384;
+		pr_info("[LGE MBHC] PMIC rev 2.0 cal. is applied.\n");
+	} else {
+		btn_low[0] = 0;		/* Hook-Key */
+		btn_high[0] = 150;
+		btn_low[1] = 151;	/* Volume Up */
+		btn_high[1] = 300;
+		btn_low[2] = 301;	/* Volume Dn */
+		btn_high[2] = 550;
+		btn_low[3] = 551;
+		btn_high[3] = 600;
+		btn_low[4] = 601;
+		btn_high[4] = 750;
+		pr_info("[LGE MBHC] PMIC rev 1.1 cal. is applied.\n");
+	}
+#else	/* Qualcomm Default Values */
 	btn_low[0] = 0;
 	btn_high[0] = 25;
 	btn_low[1] = 25;
@@ -1068,6 +1100,7 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	btn_high[3] = 112;
 	btn_low[4] = 112;
 	btn_high[4] = 137;
+#endif
 
 	return msm8x16_wcd_cal;
 }
