@@ -1,0 +1,70 @@
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 and
+* only version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*/
+
+&pm8916_chg {
+	status = "ok";
+
+	lge,no-init-cable = <0 0 0>;
+	lge,cable-mhl-1k = <5000 500 500>;
+	lge,cable-u-28p7k = <5500 1500 500>;
+	lge,cable-28p7k = <6000 1500 500>;
+	lge,cable-56k = <200000 1500 1500>;
+	lge,cable-100k = <239000 1500 500>;
+	lge,cable-130k = <340000 500 500>;
+	lge,cable-180k = <400000 1500 500>;
+	lge,cable-200k = <410000 1500 500>;
+	lge,cable-220k = <485000 1500 500>;
+	lge,cable-270k = <560000 1500 500>;
+	lge,cable-330k = <735000 1500 500>;
+	lge,cable-620k = <955000 1500 500>;
+	lge,cable-910k = <1140000 1500 1500>;
+	lge,cable-none = <1900000 1500  500>;
+};
+
+/ {
+	mtp_batterydata: qcom,battery-data {
+		qcom,rpull-up-kohm = <100>;
+		qcom,vref-batt-therm = <1800000>;
+
+		#include "../../qcom/batterydata-palladium.dtsi"
+	};
+};
+
+&pm8916_bms {
+	status = "ok";
+	qcom,battery-data = <&mtp_batterydata>;
+};
+
+&pm8916_vadc {
+	chan@10 {
+		label = "usb_id";
+		reg = <0x10>;
+		qcom,decimation = <0>;
+		qcom,pre-div-channel-scaling = <0>;
+		qcom,calibration-type = "absolute";
+		qcom,scale-function = <0>;
+		qcom,hw-settle-time = <2>;
+		qcom,fast-avg-setup = <0>;
+	};
+};
+
+&i2c_1 {
+	max17050@36 {
+		status =  "ok";
+		compatible = "maxim,max17050";
+		interrupt-parent = <&msm_gpio>;
+		interrupts = <1 0x0>;
+		reg = <0x36>;
+		max17050,full_design = <3000>;
+	};
+};
+

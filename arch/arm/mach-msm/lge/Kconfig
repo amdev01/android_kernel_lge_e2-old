@@ -1,0 +1,95 @@
+config MACH_LGE
+	bool
+
+menu "LGE Board Selection"
+
+config MACH_MSM8916_LGPS19
+	bool "MSM8916 LGPS19"
+	depends on ARCH_MSM8916
+	select MACH_LGE
+	help
+	  Support for the Qualcomm MSM8916 LGPS19 device.
+
+config MACH_MSM8916_E2_GLOBAL_COM
+        bool "MSM8916 E2_GLOBAL_COM"
+        depends on ARCH_MSM8916
+        select MACH_LGE
+        help
+          Support for the Qualcomm MSM8916 E2 Global device.
+
+config MACH_MSM8916_E2DS_GLOBAL_COM
+        bool "MSM8916 E2DS_GLOBAL_COM"
+        depends on ARCH_MSM8916
+        select MACH_LGE
+        help
+          Support for the Qualcomm MSM8916 E2DS Global device.
+
+config MACH_MSM8916_E2N_GLOBAL_COM
+        bool "MSM8916 E2N_GLOBAL_COM"
+        depends on ARCH_MSM8916
+        select MACH_LGE
+        help
+          Support for the Qualcomm MSM8916 E2N Global device.          
+endmenu
+
+config DTS_TARGET
+	string "DTS target dir"
+	default "msm8916-lgps19" if MACH_MSM8916_LGPS19
+	default "msm8916-e2_global_com" if MACH_MSM8916_E2_GLOBAL_COM
+	default "msm8916-e2ds_global_com" if MACH_MSM8916_E2DS_GLOBAL_COM
+	default "msm8916-e2n_global_com" if MACH_MSM8916_E2N_GLOBAL_COM	
+	help
+	  CONFIG_DTS_TARGET should be set to support appended dts.
+	  ex) CONFIG_DTS_TARGET="msm8974-g2-kr".
+
+menu "LGE Specific Patches"
+
+config LGE_BOOTLOADER_LOG
+	tristate "Support LGE bootloader log"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE bootloader log
+
+config LGE_HANDLE_PANIC
+	tristate "Support LGE Kernel Panic Handler"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE Error handler
+
+config LGE_BOOTLOADER_TIME_CHECKER
+	bool "Show bootloader(LK, SBL) time"
+	default n
+	depends on MACH_LGE
+	help
+	  This shows the lk and sbl1 booting time in MSM8974.
+	  If this feature is enabled, it should be check by adb shell.
+	  Device Node : sys/module/lge_bootloader_time_checker/
+
+config LGE_HANDLE_PANIC
+	tristate "Support LGE Kernel Panic Handler"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE Crash Handler
+
+config LCD_KCAL
+        bool "Enable sysfs for LCD KCAL"
+        default n
+
+config PRE_SELF_DIAGNOSIS
+	tristate "Support LGE self diagnosis for factory"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE self diagnosis
+
+config LGE_QFPROM_INTERFACE
+	bool "Support qfprom interface"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE QFPROM DRIVER.
+	  
+endmenu
