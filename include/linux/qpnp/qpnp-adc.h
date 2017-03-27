@@ -21,6 +21,10 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/qpnp-revid.h>
+#if defined(CONFIG_LGE_PM) && !defined(CONFIG_SENSORS_QPNP_ADC_CURRENT)
+#include <linux/err.h>
+#endif
+
 /**
  * enum qpnp_vadc_channels - QPNP AMUX arbiter channels
  */

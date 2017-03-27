@@ -284,7 +284,14 @@ struct msm_camera_i2c_reg_setting {
 	enum msm_camera_i2c_reg_addr_type addr_type;
 	enum msm_camera_i2c_data_type data_type;
 	uint16_t delay;
+	uint16_t *value;	/*                                                            */
 };
+/*                                                                                                                   */
+struct msm_fps_range_setting{
+   int32_t min_fps;
+   int32_t max_fps;
+};
+/*                                                                                                                    */
 
 struct msm_camera_i2c_seq_reg_array {
 	uint16_t reg_addr;
@@ -500,6 +507,14 @@ enum msm_sensor_cfg_type_t {
 	CFG_SET_WHITE_BALANCE,
 	CFG_SET_AUTOFOCUS,
 	CFG_CANCEL_AUTOFOCUS,
+	CFG_PAGE_MODE_READ_I2C_ARRAY,	/*                                                            */
+	CFG_SET_FRAMERATE_FOR_SOC,		/*                                                                     */
+/*                                                                              */
+	CFG_SET_AEC_ROI,
+	CFG_SET_AWB_LOCK,
+	CFG_SET_AEC_LOCK,
+	CFG_SET_INIT_SETTING_VT,
+/*                                                                              */
 	CFG_SET_STREAM_TYPE,
 };
 
