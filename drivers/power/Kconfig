@@ -204,6 +204,23 @@ config BATTERY_MAX17042
 	  with MAX17042. This driver also supports max17047/50 chips which are
 	  improved version of max17042.
 
+config BATTERY_MAX17048
+	tristate "Maxim MAX17048 fuel gauging external driver"
+	depends on I2C && LGE_PM
+	default n
+	help
+	  MAX17048 is fuel-gauge systems for lithium-ion (Li+) batteries
+	  in handheld and portable equipment. The MAX17048 is configured
+	  to operate with a single lithium cell
+config BATTERY_MAX17050
+        tristate "Maxim MAX17050 fuel gauging external driver"
+        depends on I2C
+        default n
+        help
+          MAX17050 is fuel-gauge systems for lithium-ion (Li+) batteries
+          in handheld and portable equipment. The MAX17050 is configured
+          to operate with a single lithium cell.
+
 config BATTERY_ANDROID
 	tristate "Battery driver for Android"
 	help
@@ -516,7 +533,69 @@ config QPNP_LINEAR_CHARGER
 	  detection and charging. The driver also offers relevant information
 	  to userspace via the power supply framework.
 
+config LGE_PM
+	bool "PM8916 LGE Feature"
+	depends on SPMI
+	default n
+	help
+	  Say Y here to enable support for pm8916 chip lge feature,
+	  such as power management, battery charging,
+	  battery monitoring system with battery FEI,
+	  and fuel gauge.
+
+config LGE_CHARGER_TEMP_SCENARIO
+	depends on LGE_PM
+	default n
+	bool "LGE CHAGING TEMP SCENARIO Configuraion"
+	help
+	  Say Y here to support for lge charging temperature scenario.
+	  This manages the charging status by battery temperature.
+
+config LGE_PM_FACTORY_CABLE
+	depends on LGE_PM
+	default n
+	bool "LGE PM Factory Cable Configuration"
+	help
+	  Say Y here to support for lge pm factory cable.
+	  If factory cable was connected, set charging current
+	  according to factory cable type.
+
+config LGE_PM_BATTERY_ID_CHECKER
+	bool "Virtual Device for LGE Battery ID Checker"
+	depends on LGE_PM
+	help
+	  Say Y here to enable LGE Battery ID Checker
 source "drivers/power/reset/Kconfig"
+
+config LGE_PM_FACTORY_TESTMODE
+	bool "testmode node setting for battery testmode"
+	depends on LGE_PM
+	help
+	  Say Y here to enable testmode setting
+
+config LGE_PM_PSEUDO_BATTERY
+	tristate "Pseudo battery mode setting for factory test"
+	default y
+	help
+	  Say Y here to enable pseudo mode setting
+
+config LGE_PM_SMPL_COUNT
+    bool "SMPL Counter"
+    depends on LGE_PM
+    help
+      Say Y here to enable smpl count for hiddenmenu.
+
+config LGE_PM_PWR_KEY_FOR_CHG_LOGO
+	bool "Control the PWR KEY for charger logo"
+	depends on LGE_PM
+	help
+	  PWR KEY could be controlled by this code.
+
+config LGE_PM_BATTERY_PROFILE_DATA
+	bool "Apply LGE battery profile data"
+	depends on LGE_PM && LGE_PM_BATTERY_ID_CHECKER
+	help
+	  Say Y here to  Apply LGE battery profile data
 
 endif # POWER_SUPPLY
 
