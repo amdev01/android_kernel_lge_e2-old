@@ -39,6 +39,7 @@
 #include "diag_dci.h"
 #include "diag_masks.h"
 #include "diagfwd_bridge.h"
+#include "mts_tty.h"
 
 #define STM_CMD_VERSION_OFFSET	4
 #define STM_CMD_MASK_OFFSET	5
@@ -50,6 +51,10 @@
 #define STM_RSP_NUM_BYTES		9
 
 #define SMD_DRAIN_BUF_SIZE 4096
+
+#ifdef CONFIG_LGE_DM_APP
+#include "lg_dm_tty.h"
+#endif
 
 int diag_debug_buf_idx;
 unsigned char diag_debug_buf[1024];
@@ -692,6 +697,22 @@ void diag_smd_send_req(struct diag_smd_info *smd_info)
 		(driver->logging_mode == MEMORY_DEVICE_MODE)) {
 			chk_logging_wakeup();
 	}
+
+#ifdef CONFIG_LGE_DM_APP
+    else if (smd_info->ch && (driver->logging_mode == DM_APP_MODE)) {
+		chk_logging_wakeup();
+		if( buf != NULL && smd_info->in_busy_1 == 0){
+			smd_info->in_busy_1 = 1;
+		}
+		else if(buf != NULL && smd_info->in_busy_2 == 0){
+			smd_info->in_busy_2 = 1;
+		}
+
+		lge_dm_tty->set_logging = 1;
+		wake_up_interruptible(&lge_dm_tty->waitq);
+	}
+#endif
+
 	return;
 
 fail_return:
@@ -821,6 +842,7 @@ void encode_rsp_and_send(int buf_length)
 int diag_device_write(void *buf, int data_type, struct diag_request *write_ptr)
 {
 	int i, err = 0, index;
+    int loop = 0;
 	index = 0;
 
 	if (driver->logging_mode == MEMORY_DEVICE_MODE) {
@@ -939,9 +961,19 @@ int diag_device_write(void *buf, int data_type, struct diag_request *write_ptr)
 					   " USB: ", 16, 1, DUMP_PREFIX_ADDRESS,
 					    buf, write_ptr->length, 1);
 #endif /* DIAG DEBUG */
-			err = diag_write_to_usb(driver->legacy_ch, write_ptr);
+            if(mts_tty->run) {
+                mts_tty_process(write_ptr->buf, write_ptr->length);
+                wake_up(&driver->smd_wait_q);
+                for(loop = 0; loop < 3; loop++) {
+                    driver->smd_data[loop].in_busy_1 = 0;
+                    driver->smd_data[loop].in_busy_2 = 0;
+                    queue_work(driver->smd_data[loop].wq,
+                            &(driver->smd_data[loop].diag_read_smd_work));
+                }
+                return -EPERM;
+            }
+            err = diag_write_to_usb(driver->legacy_ch, write_ptr);
 		}
-
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
 		else if (data_type == HSIC_DATA || data_type == HSIC_2_DATA) {
 			index = data_type - HSIC_DATA;
@@ -988,6 +1020,36 @@ int diag_device_write(void *buf, int data_type, struct diag_request *write_ptr)
 		APPEND_DEBUG('d');
 	}
 #endif /* DIAG OVER USB */
+
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		/* only diag cmd #250 for supporting testmode tool */
+		if (data_type == APPS_DATA) {
+			driver->write_ptr_svc = (struct diag_request *)
+			(diagmem_alloc(driver, sizeof(struct diag_request),
+				 POOL_TYPE_WRITE_STRUCT));
+			if (driver->write_ptr_svc) {
+				driver->write_ptr_svc->length = driver->used;
+				driver->write_ptr_svc->buf = buf;
+
+				queue_work(lge_dm_tty->dm_wq,
+					&(lge_dm_tty->dm_usb_work));
+				flush_work(&(lge_dm_tty->dm_usb_work));
+
+			} else {
+				err = -1;
+			}
+
+			return err;
+
+		}
+
+		lge_dm_tty->set_logging = 1;
+		wake_up_interruptible(&lge_dm_tty->waitq);
+
+	}
+#endif
+
     return err;
 }
 
@@ -1619,7 +1681,7 @@ int diag_process_apps_pkt(unsigned char *buf, int len)
 		/* send response back */
 		driver->apps_rsp_buf[0] = *buf;
 		encode_rsp_and_send(0);
-		msleep(5000);
+		//msleep(5000);	// avoid reset for e2
 		/* call download API */
 		msm_set_restart_mode(RESTART_DLOAD);
 		printk(KERN_CRIT "diag: download mode set, Rebooting SoC..\n");
@@ -1874,6 +1936,23 @@ int diagfwd_connect(void)
 	int err;
 	int i;
 
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		printk(KERN_DEBUG "diag: USB connected in DM_APP_MODE\n");
+		driver->usb_connected = 1;
+
+		err = usb_diag_alloc_req(driver->legacy_ch, N_LEGACY_WRITE,
+				N_LEGACY_READ);
+		if (err)
+			printk(KERN_ERR "diag: unable to alloc USB req on legacy ch");
+
+		/* Poll USB channel to check for data*/
+		queue_work(driver->diag_wq, &(driver->diag_read_work));
+
+		return 0;
+	}
+#endif
+
 	printk(KERN_DEBUG "diag: USB connected\n");
 	err = usb_diag_alloc_req(driver->legacy_ch,
 			(driver->supports_separate_cmdrsp ?
@@ -1904,6 +1983,17 @@ int diagfwd_disconnect(void)
 	int i;
 	unsigned long flags;
 	struct diag_smd_info *smd_info = NULL;
+
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		printk(KERN_DEBUG "diag: USB disconnected in DM_APP_MODE\n");
+		driver->usb_connected = 0;
+
+//		usb_diag_free_req(driver->legacy_ch);
+
+		return 0;
+	}
+#endif
 
 	printk(KERN_DEBUG "diag: USB disconnected\n");
 	driver->usb_connected = 0;
@@ -2026,6 +2116,18 @@ int diagfwd_read_complete(struct diag_request *diag_read_ptr)
 				queue_work(driver->diag_wq,
 						 &(driver->diag_read_work));
 		}
+
+#ifdef CONFIG_LGE_DM_APP
+		if (driver->logging_mode == DM_APP_MODE) {
+			if (status != -ECONNRESET && status != -ESHUTDOWN)
+				queue_work(driver->diag_wq,
+					&(driver->diag_proc_hdlc_work));
+			else
+				queue_work(driver->diag_wq,
+						 &(driver->diag_read_work));
+		}
+#endif
+
 	}
 	else
 		printk(KERN_ERR "diag: Unknown buffer ptr from USB");

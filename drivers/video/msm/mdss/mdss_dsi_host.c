@@ -270,6 +270,9 @@ void mdss_dsi_host_init(struct mdss_panel_data *pdata)
 		data |= ((pinfo->traffic_mode & 0x03) << 8);
 		data |= ((pinfo->dst_format & 0x03) << 4); /* 2 bits */
 		data |= (pinfo->vc & 0x03);
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+		data |= BIT(31);
+#endif
 		MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x0010, data);
 
 		data = 0;
@@ -328,6 +331,11 @@ void mdss_dsi_host_init(struct mdss_panel_data *pdata)
 	else
 		MIPI_OUTP(ctrl_pdata->ctrl_base + 0x3C, 0x14000000);
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	MIPI_OUTP(ctrl_pdata->ctrl_base + 0xBC, 0xFFFFF);
+	MIPI_OUTP(ctrl_pdata->ctrl_base + 0xC0, 0x111);
+#endif
+
 	data = 0;
 	if (pinfo->te_sel)
 		data |= BIT(31);
@@ -358,7 +366,7 @@ void mdss_dsi_host_init(struct mdss_panel_data *pdata)
 
 	/* allow only ack-err-status  to generate interrupt */
 	/* DSI_ERR_INT_MASK0 */
-	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x010c, 0x13ff3fe0);
+	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x010c, 0x13f03fe0);
 
 	intr_ctrl |= DSI_INTR_ERROR_MASK;
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x0110,
@@ -423,6 +431,38 @@ void mdss_dsi_sw_reset(struct mdss_panel_data *pdata)
 	wmb();
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x118, 0x00);
 	wmb();
+}
+
+void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl)
+{
+	u32 data0;
+	pr_err("MDSS DSI CTRL and PHY reset\n");
+
+	if (ctrl->dsi_recovery)
+		ctrl->dsi_recovery->fxn(ctrl->dsi_recovery->data, 0);
+
+	data0 = MIPI_INP(ctrl->ctrl_base + 0x0004);
+	/* Disable DSI controller and video,command mode engines */
+	MIPI_OUTP(ctrl->ctrl_base + 0x004, data0 & ~(0x7));
+	MIPI_OUTP(ctrl->ctrl_base + 0x11c, 0x23f); /* DSI_CLK_CTRL */
+
+	/* DSI_SW_RESET */
+	MIPI_OUTP(ctrl->ctrl_base + 0x118, 0x1);
+	wmb();
+	MIPI_OUTP(ctrl->ctrl_base + 0x118, 0x0);
+	wmb();
+
+	/* DSI_PHY_RESET for digital blocks */
+	MIPI_OUTP(ctrl->phy_io.base + 0x174, BIT(7));
+	wmb();
+	MIPI_OUTP(ctrl->phy_io.base + 0x174, 0x0);
+	wmb();
+
+	MIPI_OUTP(ctrl->ctrl_base + 0x11c, 0x229); /* DSI_CLK_CTRL */
+	MIPI_OUTP(ctrl->ctrl_base + 0x004, data0); /* Restore DSI controller */
+
+	if (ctrl->dsi_recovery)
+		ctrl->dsi_recovery->fxn(ctrl->dsi_recovery->data, 1);
 }
 
 void mdss_dsi_sw_reset_restore(struct mdss_dsi_ctrl_pdata *ctrl)
@@ -555,7 +595,8 @@ void mdss_dsi_op_mode_config(int mode,
 
 	if (mode == DSI_VIDEO_MODE) {
 		dsi_ctrl |= 0x03;
-		intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK | DSI_INTR_BTA_DONE_MASK;
+		intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK | DSI_INTR_BTA_DONE_MASK |
+			 DSI_INTR_ERROR_MASK;
 	} else {		/* command mode */
 		dsi_ctrl |= 0x05;
 		if (pdata->panel_info.type == MIPI_VIDEO_PANEL)
@@ -1422,6 +1463,12 @@ static int dsi_event_thread(void *data)
 
 		pr_debug("%s: ev=%x\n", __func__, todo);
 
+		if (todo & DSI_EV_DLNx_FIFO_OVERFLOW) {
+			/* Clock lane stuck at active state */
+			if (MIPI_INP(ctrl->ctrl_base + 0x00A8) == 0x1f0f)
+				mdss_dsi_ctl_phy_reset(ctrl);
+		}
+
 		if (todo & DSI_EV_PLL_UNLOCKED)
 			mdss_dsi_pll_relock(ctrl);
 
@@ -1508,6 +1555,9 @@ void mdss_dsi_fifo_status(struct mdss_dsi_ctrl_pdata *ctrl)
 	if (status & 0xcccc4489) {
 		MIPI_OUTP(base + 0x000c, status);
 		pr_err("%s: status=%x\n", __func__, status);
+		if (status & 0x44440000) /* DLNx_HS_FIFO_OVERFLOW */
+			dsi_send_events(ctrl, DSI_EV_DLNx_FIFO_OVERFLOW);
+
 		if (status & 0x0080)  /* CMD_DMA_FIFO_UNDERFLOW */
 			dsi_send_events(ctrl, DSI_EV_MDP_FIFO_UNDERFLOW);
 			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1",

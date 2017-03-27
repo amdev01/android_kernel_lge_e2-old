@@ -27,6 +27,16 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+int has_dsv_f;
+/* For INCELL Knock on, When the device sleep out, DSV GPIO MUST be controled in LOW state */
+/* BUT, when the device is first booting, we DON'T control DSV because of continuous_splash_enable */
+/* is_first_dsv_control FLAG is for SKIPPING the DSV Control when the device first booting */
+/* is_available_dsv_control FLAG is for BLOCKING the DSV GPIO Control except Display  */
+int is_first_dsv_control = 1;
+bool is_available_dsv_control = 0;
+#endif
+
 static int mdss_dsi_pinctrl_set_state(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 					bool active);
 
@@ -84,6 +94,24 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 		return 0;
 
 	if (enable) {
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+		/* For INCELL Knock on, When the device sleep out, DSV GPIO MUST be controled in LOW state */
+		/* BUT, when the device is first booting, we DON'T control DSV because of continuous_splash_enable */
+		/* is_first_dsv_control FLAG is for SKIPPING the DSV Control when the device first booting */
+		if (is_first_dsv_control == 1)
+		{
+			is_first_dsv_control = 0;
+		}
+		else
+		{
+			/* is_available_dsv_control FLAG is for BLOCKING the DSV GPIO Control except Display  */
+			/* After LCD On, DSV control is NOT available like "is_available_dsv_control = 0"  */
+			is_available_dsv_control = 0;
+			pr_err("%s : dsv_control is not allowed after this time. is_available_dsv_control = [%d]\n", __func__, is_available_dsv_control);
+			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+			msleep(5);
+		}
+#endif
 		for (i = 0; i < DSI_MAX_PM; i++) {
 			/*
 			 * Core power module will be enabled when the
@@ -112,6 +140,14 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				goto error_enable;
 			}
 		}
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+		gpio_direction_output((ctrl_pdata->disp_fd_gpio), 1);
+		gpio_set_value((ctrl_pdata->disp_fd_gpio), 1);
+		pr_info("%s: LCD IOVCC Enable", __func__);
+		gpio_direction_output((ctrl_pdata->disp_iovcc_gpio), 1);
+		gpio_set_value((ctrl_pdata->disp_iovcc_gpio), 1);
+#endif
+
 	} else {
 		ret = mdss_dsi_panel_reset(pdata, 0);
 		if (ret) {
@@ -376,7 +412,7 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata)
 				panel_data);
 
 	panel_info = &ctrl_pdata->panel_data.panel_info;
-	pr_debug("%s+: ctrl=%p ndx=%d\n", __func__,
+	pr_info("%s+: ctrl=%p ndx=%d\n", __func__,
 				ctrl_pdata, ctrl_pdata->ndx);
 
 	if (pdata->panel_info.type == MIPI_CMD_PANEL)
@@ -401,7 +437,7 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata)
 	    && (panel_info->new_fps != panel_info->mipi.frame_rate))
 		panel_info->mipi.frame_rate = panel_info->new_fps;
 
-	pr_debug("%s-:\n", __func__);
+	pr_info("%s-:\n", __func__);
 
 	return ret;
 }
@@ -708,7 +744,7 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	pr_debug("%s+: ctrl=%p ndx=%d\n",
+	pr_info("%s+: ctrl=%p ndx=%d\n",
 				__func__, ctrl_pdata, ctrl_pdata->ndx);
 
 	pinfo = &pdata->panel_info;
@@ -770,7 +806,7 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	if (pdata->panel_info.type == MIPI_CMD_PANEL)
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
 
-	pr_debug("%s-:\n", __func__);
+	pr_info("%s-:\n", __func__);
 	return 0;
 }
 
@@ -1152,6 +1188,13 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 	case MDSS_EVENT_DSI_DYNAMIC_SWITCH:
 		rc = mdss_dsi_update_panel_config(ctrl_pdata,
 					(int)(unsigned long) arg);
+		break;
+	case MDSS_EVENT_INTF_RECOVERY:
+		if (arg)
+			ctrl_pdata->dsi_recovery =
+				(struct mdss_intf_recovery *)arg;
+		if (pdata->panel_info.cont_splash_enabled)
+			mdss_dsi_error(ctrl_pdata);
 		break;
 	default:
 		pr_debug("%s: unhandled event=%d\n", __func__, event);
@@ -1613,9 +1656,25 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	ctrl_pdata->disp_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-enable-gpio", 0);
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	ctrl_pdata->disp_fd_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-fd-gpio", 0);
+#endif
+
 	if (!gpio_is_valid(ctrl_pdata->disp_en_gpio))
 		pr_err("%s:%d, Disp_en gpio not specified\n",
 						__func__, __LINE__);
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	if (!gpio_is_valid(ctrl_pdata->disp_fd_gpio))
+		pr_err("%s:%d, Disp_fd gpio not specified\n",
+						__func__, __LINE__);
+	ctrl_pdata->disp_iovcc_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-iovcc-gpio", 0);
+	if (!gpio_is_valid(ctrl_pdata->disp_iovcc_gpio))
+		pr_err("%s:%d, Disp_iovcc gpio not specified\n",
+						__func__, __LINE__);
+#endif
 
 	ctrl_pdata->bklt_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-bklight-en-gpio", 0);
@@ -1627,6 +1686,10 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	if (!gpio_is_valid(ctrl_pdata->rst_gpio))
 		pr_err("%s:%d, reset gpio not specified\n",
 						__func__, __LINE__);
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	ctrl_pdata->ldo_mode = of_property_read_bool(ctrl_pdev->dev.of_node, "qcom,ldo_mode");
+#endif
 
 	if (pinfo->mode_gpio_state != MODE_GPIO_NOT_VALID) {
 
@@ -1677,6 +1740,11 @@ int dsi_panel_device_register(struct device_node *pan_node,
 			ctrl_pdata->pclk_rate, ctrl_pdata->byte_clk_rate);
 
 	ctrl_pdata->ctrl_state = CTRL_STATE_UNKNOWN;
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	has_dsv_f = of_property_read_bool(pan_node,
+			"lge,has-dsv");
+#endif
 
 	if (pinfo->cont_splash_enabled) {
 		pinfo->panel_power_on = 1;

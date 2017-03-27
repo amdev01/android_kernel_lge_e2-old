@@ -55,10 +55,19 @@
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
 #define MDSS_FB_NUM 2
+#endif
+
+#ifdef CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL
+#include "mdss_mdp.h"
+#include "mdss_dsi.h"
 #endif
 
 #define MAX_FBI_LIST 32
@@ -1533,6 +1542,12 @@ static int mdss_fb_register(struct msm_fb_data_type *mfd)
 	pr_info("FrameBuffer[%d] %dx%d registered successfully!\n", mfd->index,
 					fbi->var.xres, fbi->var.yres);
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+        /* save fb address for crash handler display buffer */
+        if (mfd->index == 0)
+                lge_set_fb_addr((unsigned int)mfd->fbi->fix.smem_start);
+#endif
+
 	return 0;
 }
 
@@ -2639,6 +2654,10 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 	struct msm_sync_pt_data *sync_pt_data = NULL;
 	unsigned int dsi_mode = 0;
 
+#ifdef CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL
+	u32 dsi_panel_invert = 0;
+#endif
+
 	if (!info || !info->par)
 		return -EINVAL;
 
@@ -2704,6 +2723,14 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 		ret = mdss_fb_display_commit(info, argp);
 		break;
 
+#ifdef CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL
+	case MSMFB_INVERT_PANEL:
+		ret = copy_from_user(&dsi_panel_invert, argp, sizeof(int));
+		if(ret)
+			return ret;
+		ret = mdss_dsi_panel_invert(dsi_panel_invert);
+	break;
+#endif
 	case MSMFB_LPM_ENABLE:
 		ret = copy_from_user(&dsi_mode, argp, sizeof(dsi_mode));
 		if (ret) {

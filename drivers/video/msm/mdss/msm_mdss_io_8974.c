@@ -861,6 +861,14 @@ void mdss_dsi_phy_init(struct mdss_panel_data *pdata)
 	else
 		MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x00);
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	/*To set ldo mode instead of smps mode*/
+	if (ctrl_pdata->ldo_mode) {
+		MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x0280, 0x0);
+		MIPI_OUTP((ctrl_pdata->phy_io.base) + 0x1dc, 0x5d);/* 0x45 */
+	}
+#endif
+
 	off = 0x0140;	/* phy timing ctrl 0 - 11 */
 	for (i = 0; i < 12; i++) {
 		MIPI_OUTP((ctrl_pdata->phy_io.base) + off, pd->timing[i]);

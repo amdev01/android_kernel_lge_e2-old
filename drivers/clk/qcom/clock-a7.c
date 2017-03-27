@@ -27,6 +27,10 @@
 #include <linux/clk/msm-clock-generic.h>
 #include <soc/qcom/clock-local2.h>
 
+#ifdef CONFIG_LGE_PM_FACTORY_CABLE
+#include <mach/board_lge.h>
+#endif
+
 DEFINE_VDD_REGS_INIT(vdd_cpu, 1);
 
 static struct mux_div_clk a7ssmux = {
@@ -279,7 +283,25 @@ static int clock_a7_probe(struct platform_device *pdev)
 
 	snprintf(prop_name, ARRAY_SIZE(prop_name),
 			"qcom,speed%d-bin-v%d", speed_bin, version);
+
+#ifdef CONFIG_LGE_PM_FACTORY_CABLE
+	if ( LGE_BOOT_MODE_QEM_910K == lge_get_boot_mode() || LGE_BOOT_MODE_PIF_910K == lge_get_boot_mode()
+	     || LGE_BOOT_MODE_QEM_56K == lge_get_boot_mode() || LGE_BOOT_MODE_PIF_56K == lge_get_boot_mode() ){
+		pr_err("910K Detected\n");
+		if ( BATT_ID_UNKNOWN == read_lge_battery_id() ){
+			pr_err("No Battery or No proper Battery with 910K Cable\n");
+			rc = of_get_fmax_vdd_class(pdev, &a7ssmux.c, "lge,factory-bin");
+		}
+		else {
+			rc = of_get_fmax_vdd_class(pdev, &a7ssmux.c, prop_name);
+		}
+	}
+	else {
+		rc = of_get_fmax_vdd_class(pdev, &a7ssmux.c, prop_name);
+	}
+#else
 	rc = of_get_fmax_vdd_class(pdev, &a7ssmux.c, prop_name);
+#endif
 	if (rc) {
 		/* Fall back to most conservative PVS table */
 		dev_err(&pdev->dev, "Unable to load voltage plan %s!\n",

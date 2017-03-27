@@ -24,6 +24,11 @@
 #include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+extern int has_dsv_f;
+int is_dsv_cont_splash_screening_f;
+#endif
+
 /* wait for at least 2 vsyncs for lowest refresh rate (24hz) */
 #define VSYNC_TIMEOUT_US 100000
 
@@ -65,6 +70,7 @@ struct mdss_mdp_video_ctx {
 	spinlock_t vsync_lock;
 	struct mutex vsync_mtx;
 	struct list_head vsync_handlers;
+	struct mdss_intf_recovery intf_recovery;
 };
 
 static inline void mdp_video_write(struct mdss_mdp_video_ctx *ctx,
@@ -116,6 +122,29 @@ int mdss_mdp_video_addr_setup(struct mdss_data_type *mdata,
 	mdata->video_intf = head;
 	mdata->nintf = count;
 	return 0;
+}
+
+static void mdss_mdp_video_timegen_ctrl(void *data, int en)
+{
+	u32 frame_rate = 0;
+	struct mdss_mdp_video_ctx *ctx;
+	struct mdss_mdp_ctl *ctl = data;
+
+	if (!data) {
+		pr_err("%s: invalid ctl\n", __func__);
+		return;
+	}
+
+	ctx = ctl->priv_data;
+	mdp_video_write(ctx, MDSS_MDP_REG_INTF_TIMING_ENGINE_EN, !!en);
+	if (!en) {
+		/* wait for at least one VSYNC for proper TG OFF */
+		frame_rate = mdss_panel_get_framerate
+				(&(ctl->panel_data->panel_info));
+		if (!(frame_rate >= 24 && frame_rate <= 240))
+			frame_rate = 24;
+		msleep((1000/frame_rate) + 1);
+	}
 }
 
 static int mdss_mdp_video_timegen_setup(struct mdss_mdp_ctl *ctl,
@@ -746,6 +775,12 @@ int mdss_mdp_video_reconfigure_splash_done(struct mdss_mdp_ctl *ctl,
 	pdata->panel_info.cont_splash_enabled = 0;
 
 	if (!handoff) {
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+		if (has_dsv_f) {
+			is_dsv_cont_splash_screening_f = 1;
+		}
+#endif
+
 		ret = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_CONT_SPLASH_BEGIN,
 					      NULL);
 		if (ret) {
@@ -774,6 +809,12 @@ int mdss_mdp_video_reconfigure_splash_done(struct mdss_mdp_ctl *ctl,
 
 		ret = mdss_mdp_ctl_intf_event(ctl,
 			MDSS_EVENT_CONT_SPLASH_FINISH, NULL);
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+		if (has_dsv_f) {
+			is_dsv_cont_splash_screening_f = 0;
+		}
+#endif
 	}
 
 	return ret;
@@ -856,6 +897,19 @@ int mdss_mdp_video_start(struct mdss_mdp_ctl *ctl)
 	ctl->add_vsync_handler = mdss_mdp_video_add_vsync_handler;
 	ctl->remove_vsync_handler = mdss_mdp_video_remove_vsync_handler;
 	ctl->config_fps_fnc = mdss_mdp_video_config_fps;
+
+	if (ctl->intf_type == MDSS_INTF_DSI) {
+		ctx->intf_recovery.fxn = mdss_mdp_video_timegen_ctrl;
+		ctx->intf_recovery.data = ctl;
+		if (mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_INTF_RECOVERY,
+					(void *)&ctx->intf_recovery)) {
+			pr_err("Intf failed to recover\n");
+			return -EINVAL;
+		}
+	} else {
+		ctx->intf_recovery.fxn = NULL;
+		ctx->intf_recovery.data = NULL;
+	}
 
 	return 0;
 }

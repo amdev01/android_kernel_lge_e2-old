@@ -570,13 +570,13 @@ static int adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 	int ret;
 
 	/* If the dispatcher is busy then schedule the work for later */
-	if (!mutex_trylock(&dispatcher->mutex)) {
+	if (!kgsl_mutex_trylock(&dispatcher->mutex, &dispatcher->mutex_owner)) {
 		adreno_dispatcher_schedule(&adreno_dev->dev);
 		return 0;
 	}
 
 	ret = _adreno_dispatcher_issuecmds(adreno_dev);
-	mutex_unlock(&dispatcher->mutex);
+	kgsl_mutex_unlock(&dispatcher->mutex, &dispatcher->mutex_owner);
 
 	return ret;
 }
@@ -1421,7 +1421,7 @@ static void adreno_dispatcher_work(struct work_struct *work)
 	int count = 0;
 	int fault_handled = 0;
 
-	mutex_lock(&dispatcher->mutex);
+	kgsl_mutex_lock(&dispatcher->mutex, &dispatcher->mutex_owner);
 
 	while (dispatcher->head != dispatcher->tail) {
 		uint32_t consumed, retired = 0;
@@ -1591,7 +1591,7 @@ done:
 		kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
 	}
 
-	mutex_unlock(&dispatcher->mutex);
+	kgsl_mutex_unlock(&dispatcher->mutex, &dispatcher->mutex_owner);
 }
 
 void adreno_dispatcher_schedule(struct kgsl_device *device)
@@ -1717,7 +1717,7 @@ void adreno_dispatcher_close(struct adreno_device *adreno_dev)
 {
 	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 
-	mutex_lock(&dispatcher->mutex);
+	kgsl_mutex_lock(&dispatcher->mutex, &dispatcher->mutex_owner);
 	del_timer_sync(&dispatcher->timer);
 	del_timer_sync(&dispatcher->fault_timer);
 
@@ -1727,7 +1727,7 @@ void adreno_dispatcher_close(struct adreno_device *adreno_dev)
 			% ADRENO_DISPATCH_CMDQUEUE_SIZE;
 	}
 
-	mutex_unlock(&dispatcher->mutex);
+	kgsl_mutex_unlock(&dispatcher->mutex, &dispatcher->mutex_owner);
 
 	kobject_put(&dispatcher->kobj);
 }
@@ -1871,7 +1871,7 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 
 	memset(dispatcher, 0, sizeof(*dispatcher));
 
-	mutex_init(&dispatcher->mutex);
+	kgsl_mutex_init(&dispatcher->mutex, &dispatcher->mutex_owner);
 
 	setup_timer(&dispatcher->timer, adreno_dispatcher_timer,
 		(unsigned long) adreno_dev);
@@ -1914,8 +1914,8 @@ int adreno_dispatcher_idle(struct adreno_device *adreno_dev)
 	 * Ensure that this function is not called when dispatcher
 	 * mutex is held and device is started
 	 */
-	if (mutex_is_locked(&dispatcher->mutex) &&
-		dispatcher->mutex.owner == current)
+	if (kgsl_mutex_is_lock_owner_current(
+			&dispatcher->mutex, &dispatcher->mutex_owner))
 		BUG_ON(1);
 
 	return adreno_dispatcher_idle_unsafe(adreno_dev);

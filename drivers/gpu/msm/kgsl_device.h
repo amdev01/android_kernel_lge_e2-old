@@ -816,6 +816,18 @@ static inline int kgsl_sysfs_store(const char *buf, unsigned int *ptr)
 }
 
 /**
+ * kgsl_mutex_init() -- initialize mutex & owner
+ * @mutex: mutex to initialize
+ * @owner: current mutex owner
+ */
+static inline void kgsl_mutex_init(struct mutex *mutex, atomic64_t *owner)
+{
+	mutex_init(mutex);
+	atomic64_set(owner, 0);
+}
+
+
+/**
  * kgsl_mutex_lock() -- try to acquire the mutex if current thread does not
  *                      already own it
  * @mutex: mutex to lock
@@ -835,6 +847,46 @@ static inline int kgsl_mutex_lock(struct mutex *mutex, atomic64_t *owner)
 }
 
 /**
+ * kgsl_mutex_trylock() -- try to acquire the mutex if current thread does not
+ * own it, Dont try to acquire if current thread owns it
+ * @mutex: mutex to lock
+ * @owner: current mutex owner
+ */
+static inline int kgsl_mutex_trylock(struct mutex *mutex, atomic64_t *owner)
+{
+	int ret = 0;
+
+	if (atomic64_read(owner) != (long)current) {
+		ret = mutex_trylock(mutex);
+		if (ret) {
+			atomic64_set(owner, (long)current);
+			/* Barrier to make sure owner is updated */
+			smp_wmb();
+			return ret;
+		}
+	}
+
+	return ret;
+}
+
+
+/**
+ * kgsl_mutex_is_lock_owner_current() -- checks whether the mutex is locked
+ * and current thread is the owner
+ * @mutex: mutex to lock
+ * @owner: current mutex owner
+ */
+static inline int kgsl_mutex_is_lock_owner_current(
+		struct mutex *mutex, atomic64_t *owner)
+{
+	if (mutex_is_locked(mutex) && atomic64_read(owner) == (long)current)
+		return 1;
+	else
+		return 0;
+}
+
+/**
+
  * kgsl_mutex_unlock() -- Clear the owner and unlock the mutex
  * @mutex: mutex to unlock
  * @owner: current mutex owner

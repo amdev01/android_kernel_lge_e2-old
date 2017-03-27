@@ -2040,7 +2040,9 @@ static void wcnss_nvbin_dnld(void)
 	const struct firmware *nv = NULL;
 	struct device *dev = &penv->pdev->dev;
 
+    pr_err("wcnss: wcnss_nvbin_dnld \n"); 
 	down_read(&wcnss_pm_sem);
+    pr_err("wcnss: request_firmware \n"); 
 
 	ret = request_firmware(&nv, NVBIN_FILE, dev);
 
@@ -2058,7 +2060,7 @@ static void wcnss_nvbin_dnld(void)
 
 	total_fragments = TOTALFRAGMENTS(nv_blob_size);
 
-	pr_info("wcnss: NV bin size: %d, total_fragments: %d\n",
+	pr_err("wcnss: NV bin size: %d, total_fragments: %d\n",
 		nv_blob_size, total_fragments);
 
 	/* get buffer for nv bin dnld req message */

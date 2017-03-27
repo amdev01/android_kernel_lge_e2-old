@@ -108,6 +108,7 @@ enum adreno_gpurev {
 /**
  * struct adreno_dispatcher - container for the adreno GPU dispatcher
  * @mutex: Mutex to protect the structure
+ * @mutex_owner : To track which thread is owning dispatcher mutex
  * @state: Current state of the dispatcher (active or paused)
  * @timer: Timer to monitor the progress of the command batches
  * @inflight: Number of command batch operations pending in the ringbuffer
@@ -125,6 +126,7 @@ enum adreno_gpurev {
  */
 struct adreno_dispatcher {
 	struct mutex mutex;
+	atomic64_t mutex_owner;
 	unsigned long priv;
 	struct timer_list timer;
 	struct timer_list fault_timer;

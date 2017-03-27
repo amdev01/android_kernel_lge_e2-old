@@ -388,7 +388,7 @@ static int pil_alloc_region(struct pil_priv *priv, phys_addr_t min_addr,
 	else
 		aligned_size = ALIGN(size, SZ_1M);
 
-	dma_set_attr(DMA_ATTR_SKIP_ZEROING, &priv->desc->attrs);
+		dma_set_attr(DMA_ATTR_SKIP_ZEROING, &priv->desc->attrs);
 	if (cma_region_is_removed(priv->desc->dev))
 		dma_set_attr(DMA_ATTR_NO_KERNEL_MAPPING, &priv->desc->attrs);
 

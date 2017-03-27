@@ -24,9 +24,24 @@
 
 #include "mdss_dsi.h"
 
+#ifdef CONFIG_LGE_PM_PWR_KEY_FOR_CHG_LOGO
+#include <mach/board_lge.h>
+void qpnp_goto_suspend_for_chg_logo(void);
+#endif
+
+static struct mdss_panel_data *pdata_base;
+
 #define DT_CMD_HDR 6
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
+#if defined(CONFIG_BACKLIGHT_RT8542)
+extern void rt8542_lcd_backlight_set_level(int level);
+#endif
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+static struct dsi_panel_cmds lge_display_on_cmds;
+extern int is_dsv_cont_splash_screening_f;
+extern int has_dsv_f;
+#endif
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -153,9 +168,37 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+static int is_first_request = 0;
+#endif
+
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	int rc = 0;
+
+#if !defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+		rc = gpio_request(ctrl_pdata->disp_en_gpio,
+						"disp_enable");
+		if (rc) {
+			pr_err("request disp_en gpio failed, rc=%d\n",
+				       rc);
+			goto disp_en_gpio_err;
+		}
+	}
+#endif
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	if (is_first_request == 0)
+	{
+    if (gpio_is_valid(ctrl_pdata->rst_gpio)) {
+	    rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
+	    if (rc) {
+		    pr_err("request reset gpio failed, rc=%d\n",
+			    rc);
+		    goto rst_gpio_err;
+	    }
+	}
 
 	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->disp_en_gpio,
@@ -166,12 +209,36 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			goto disp_en_gpio_err;
 		}
 	}
+
+    if (gpio_is_valid(ctrl_pdata->disp_iovcc_gpio)) {
+	    rc = gpio_request(ctrl_pdata->disp_iovcc_gpio, "disp_iovcc_en");
+	    if (rc) {
+		    pr_err("request iovcc gpio failed, rc=%d\n",
+			    rc);
+		    goto disp_iovcc_gpio_err;
+	    }
+	}
+
+	if (gpio_is_valid(ctrl_pdata->disp_fd_gpio)) {
+		rc = gpio_request(ctrl_pdata->disp_fd_gpio,
+						"fd_enable");
+		if (rc) {
+			pr_err("request disp_fd gpio failed, rc=%d\n",
+				       rc);
+			goto disp_fd_gpio_err;
+		}
+	}
+	is_first_request = 1;
+	}
+#else
 	rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
 	if (rc) {
 		pr_err("request reset gpio failed, rc=%d\n",
 			rc);
 		goto rst_gpio_err;
 	}
+#endif
+
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->bklt_en_gpio,
 						"bklt_enable");
@@ -189,6 +256,7 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			goto mode_gpio_err;
 		}
 	}
+
 	return rc;
 
 mode_gpio_err:
@@ -201,6 +269,16 @@ rst_gpio_err:
 		gpio_free(ctrl_pdata->disp_en_gpio);
 disp_en_gpio_err:
 	return rc;
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+disp_fd_gpio_err:
+	if (gpio_is_valid(ctrl_pdata->disp_fd_gpio))
+		gpio_free(ctrl_pdata->disp_fd_gpio);
+	return rc;
+disp_iovcc_gpio_err:
+	if (gpio_is_valid(ctrl_pdata->disp_iovcc_gpio))
+		gpio_free(ctrl_pdata->disp_iovcc_gpio);
+	return rc;
+#endif
 }
 
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
@@ -228,7 +306,7 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 		return rc;
 	}
 
-	pr_debug("%s: enable = %d\n", __func__, enable);
+	pr_err("%s: enable = %d\n", __func__, enable);
 	pinfo = &(ctrl_pdata->panel_data.panel_info);
 
 	if (enable) {
@@ -237,9 +315,15 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_err("gpio request failed\n");
 			return rc;
 		}
+
 		if (!pinfo->panel_power_on) {
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+			rc = gpio_direction_output(ctrl_pdata->rst_gpio, 0);
+#endif
+#if !defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
 			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+#endif
 
 			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
 				gpio_set_value((ctrl_pdata->rst_gpio),
@@ -269,12 +353,15 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
 			gpio_free(ctrl_pdata->bklt_en_gpio);
 		}
+
+#if !defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
 		if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
 		gpio_set_value((ctrl_pdata->rst_gpio), 0);
 		gpio_free(ctrl_pdata->rst_gpio);
+#endif
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
 	}
@@ -336,6 +423,42 @@ static int mdss_dsi_panel_partial_update(struct mdss_panel_data *pdata)
 	return rc;
 }
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+extern bool is_available_dsv_control;
+/* For INCELL Knock on, When the device is in the environment like SUNSHINE or DARK Place, DSV GPIO MUST BE Controlable */
+/* void mdss_dsv_ctl(int mdss_dsv_en) is the function for DSV GPIO Control */
+/* is_available_dsv_control FLAG is for BLOCKING the DSV GPIO Control except Display  */
+void mdss_dsv_ctl(int mdss_dsv_en){
+	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+	if(pdata_base == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return;
+	}
+	ctrl =  container_of(pdata_base, struct mdss_dsi_ctrl_pdata,
+			panel_data);
+	if (is_available_dsv_control)
+	{
+		pr_err("%s: is DSV Enable ? [%d]\n", __func__, mdss_dsv_en);
+		gpio_set_value((ctrl->disp_en_gpio), mdss_dsv_en);
+
+		if(!mdss_dsv_en) {
+			gpio_set_value((ctrl->disp_fd_gpio), 0);
+			pr_info("%s: fd(%d) toggle(off)", __func__, ctrl->disp_fd_gpio);
+			mdelay(15);
+			gpio_set_value((ctrl->disp_fd_gpio), 1);
+			pr_info("%s: fd(%d) toggle(on)", __func__, ctrl->disp_fd_gpio);
+			mdelay(10);
+		}
+	}
+	else
+	{
+		pr_err("%s: DSV IS NOT AVAILABLE, is_available_dsv_control = [%d] \n", __func__, is_available_dsv_control);
+	}
+
+	return;
+}
+#endif
+
 static void mdss_dsi_panel_switch_mode(struct mdss_panel_data *pdata,
 							int mode)
 {
@@ -376,6 +499,8 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 		return;
 	}
 
+	pdata_base=pdata;
+
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -390,7 +515,11 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
+#if defined(CONFIG_BACKLIGHT_RT8542)
+		rt8542_lcd_backlight_set_level(bl_level);
+#else
 		led_trigger_event(bl_led_trigger, bl_level);
+#endif
 		break;
 	case BL_PWM:
 		mdss_dsi_panel_bklt_pwm(ctrl_pdata, bl_level);
@@ -413,6 +542,13 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 			__func__);
 		break;
 	}
+
+#ifdef CONFIG_LGE_PM_PWR_KEY_FOR_CHG_LOGO
+	if(lge_get_boot_mode() == LGE_BOOT_MODE_CHARGERLOGO && bl_level == 0)
+	{
+		qpnp_goto_suspend_for_chg_logo();
+	}
+#endif
 }
 
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
@@ -429,12 +565,33 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 				panel_data);
 	mipi  = &pdata->panel_info.mipi;
 
-	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	pr_info("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	pr_info("[LCD] %s: INCELL_PANEL", __func__);
+	if (/*!is_dsv_cont_splash_screening_f && */ctrl->on_cmds.cmd_cnt) //          
+		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+#else
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+#endif
 
-	pr_debug("%s:-\n", __func__);
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	if (gpio_is_valid(ctrl->disp_en_gpio)) {
+		mdelay(20);
+		pr_info("%s: dsv on ", __func__);
+		gpio_direction_output((ctrl->disp_en_gpio), 1);
+		mdelay(20);
+	}
+
+	if (lge_display_on_cmds.cmd_cnt) {
+		pr_info("sending diplay on code\n");
+		mdss_dsi_panel_cmds_send(ctrl, &lge_display_on_cmds);
+	}
+#endif
+
+	pr_info("%s:-\n", __func__);
 	return 0;
 }
 
@@ -451,14 +608,35 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	pr_info("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
 	mipi  = &pdata->panel_info.mipi;
 
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
-	pr_debug("%s:-\n", __func__);
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	if (/*!is_dsv_cont_splash_screening_f && */gpio_is_valid(ctrl->disp_en_gpio)){
+		if (gpio_is_valid(ctrl->disp_en_gpio)) {
+			pr_info("%s: dsv off ", __func__);
+			gpio_set_value((ctrl->disp_en_gpio), 0);
+//			gpio_free(ctrl->disp_en_gpio);
+
+			gpio_set_value((ctrl->disp_fd_gpio), 0);
+//			gpio_free(ctrl->disp_fd_gpio);
+			mdelay(15);
+//			gpio_direction_output((ctrl->disp_fd_gpio), 1);
+			gpio_set_value((ctrl->disp_fd_gpio), 1);
+			mdelay(10);
+			/* is_available_dsv_control FLAG is for BLOCKING the DSV GPIO Control except Display  */
+			/* After LCD Off, DSV control is available like "is_available_dsv_control = 1"  */
+			is_available_dsv_control = 1;
+			pr_err("%s : dsv_control is available after this time. is_available_dsv_control = [%d]\n", __func__, is_available_dsv_control);
+		}
+	}
+#endif
+
+	pr_info("%s:-\n", __func__);
 	return 0;
 }
 
@@ -1153,6 +1331,10 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->off_cmds,
 		"qcom,mdss-dsi-off-command", "qcom,mdss-dsi-off-command-state");
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	mdss_dsi_parse_dcs_cmds(np, &lge_display_on_cmds,
+		"lge,display-on-cmds", "qcom,mdss-dsi-on-command-state");
+#endif
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->status_cmds,
 			"qcom,mdss-dsi-panel-status-command",
 				"qcom,mdss-dsi-panel-status-command-state");

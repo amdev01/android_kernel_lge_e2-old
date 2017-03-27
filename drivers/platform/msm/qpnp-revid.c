@@ -26,6 +26,8 @@
 
 #define QPNP_REVID_DEV_NAME "qcom,qpnp-revid"
 
+bool is_pmic_rev_2 = false;	/*                                      */
+
 static const char *const pmic_names[] = {
 	"Unknown PMIC",
 	"PM8941",
@@ -182,6 +184,10 @@ static int qpnp_revid_probe(struct spmi_device *spmi)
 
 	build_pmic_string(pmic_string, PMIC_STRING_MAXLENGTH, spmi->sid,
 			pmic_subtype, rev1, rev2, rev3, rev4);
+
+	if (rev4 == PM8916_V2P0_REV4)	/*                                      */
+		is_pmic_rev_2 = true;
+
 	pr_info("%s options: %d, %d, %d, %d\n",
 			pmic_string, option1, option2, option3, option4);
 	return 0;

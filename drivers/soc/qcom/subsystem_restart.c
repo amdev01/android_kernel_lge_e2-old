@@ -41,6 +41,10 @@
 
 #include <asm/current.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
+
 static int enable_debug;
 module_param(enable_debug, int, S_IRUGO | S_IWUSR);
 
@@ -461,9 +465,13 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 	const char *name = dev->desc->name;
 
 	pr_info("[%p]: Shutting down %s\n", current, name);
-	if (dev->desc->shutdown(dev->desc, true) < 0)
+	if (dev->desc->shutdown(dev->desc, true) < 0) {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_subsys_crash_reason(name, LGE_ERR_SUB_SD);
+#endif
 		panic("subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
+	}
 	dev->crash_count++;
 	subsys_set_state(dev, SUBSYS_OFFLINE);
 	disable_all_irqs(dev);
@@ -490,6 +498,9 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 	if (dev->desc->powerup(dev->desc) < 0) {
 		notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
 								NULL);
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_subsys_crash_reason(name, LGE_ERR_SUB_PWR);
+#endif
 		panic("[%p]: Powerup error: %s!", current, name);
 	}
 	enable_all_irqs(dev);
@@ -782,6 +793,9 @@ static void device_restart_work_hdlr(struct work_struct *work)
 							device_restart_work);
 
 	notify_each_subsys_device(&dev, 1, SUBSYS_SOC_RESET, NULL);
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	lge_set_subsys_crash_reason(dev->desc->name, LGE_ERR_SUB_RST);
+#endif
 	panic("subsys-restart: Resetting the SoC - %s crashed.",
 							dev->desc->name);
 }
@@ -824,6 +838,9 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		schedule_work(&dev->device_restart_work);
 		return 0;
 	default:
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_set_subsys_crash_reason(name, LGE_ERR_SUB_UNK);
+#endif
 		panic("subsys-restart: Unknown restart level!\n");
 		break;
 	}
@@ -847,6 +864,57 @@ int subsystem_restart(const char *name)
 	return ret;
 }
 EXPORT_SYMBOL(subsystem_restart);
+
+/**
+ * subsys_modem_restart() - modem restart silently
+ *
+ * modem restart silently
+ */
+int subsys_modem_restart(void)
+{
+	const char *name;
+	struct subsys_device *dev = find_subsys("modem");
+
+	if (!get_device(&dev->dev))
+		return -ENODEV;
+
+	if (!try_module_get(dev->owner)) {
+		put_device(&dev->dev);
+		return -ENODEV;
+	}
+
+	name = dev->desc->name;
+
+	/*
+	 * If a system reboot/shutdown is underway, ignore subsystem errors.
+	 * However, print a message so that we know that a subsystem behaved
+	 * unexpectedly here.
+	 */
+	if (system_state == SYSTEM_RESTART
+		|| system_state == SYSTEM_POWER_OFF) {
+		pr_err("%s crashed during a system poweroff/shutdown.\n", name);
+		return -EBUSY;
+	}
+
+	pr_info("Restart sequence requested for %s, restart_level = %s.\n",
+		name, restart_levels[dev->restart_level]);
+#if 0
+#ifdef CONFIG_MACH_LGE
+	if (!strcmp(name, "modem")) {
+		modem_reboot_cnt++;
+		if (modem_reboot_cnt <= 0)
+			modem_reboot_cnt = 1;
+	}
+#endif
+#endif
+	__subsystem_restart_dev(dev);
+
+	module_put(dev->owner);
+	put_device(&dev->dev);
+
+	return 0;
+}
+EXPORT_SYMBOL(subsys_modem_restart);
 
 int subsystem_crashed(const char *name)
 {
