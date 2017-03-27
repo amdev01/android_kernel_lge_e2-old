@@ -20,7 +20,7 @@
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
 
-/*#define CONFIG_MSMB_CAMERA_DEBUG*/
+//#define CONFIG_MSMB_CAMERA_DEBUG
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
@@ -59,6 +59,8 @@ static int32_t msm_camera_get_power_settimgs_from_sensor_lib(
 
 	if ((NULL == power_info->power_setting) ||
 		(0 == power_info->power_setting_size)) {
+
+		pr_err("%s power_info->power_setting is NULL %d\n", __func__, __LINE__);
 
 		ps = power_setting_array->power_setting;
 		size = power_setting_array->size;
@@ -278,6 +280,7 @@ static int32_t msm_sensor_get_dt_data(struct device_node *of_node,
 			goto FREE_GPIO_SET_TBL;
 		}
 	}
+
 	rc = msm_sensor_get_dt_actuator_data(of_node,
 					     &sensordata->actuator_info);
 	if (rc < 0) {
@@ -426,7 +429,7 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 			__func__, __LINE__, s_ctrl);
 		return -EINVAL;
 	}
-
+	pr_err("%s  sensor_name %s  \n", __func__,s_ctrl->sensordata->sensor_name);
 	power_info = &s_ctrl->sensordata->power_info;
 	sensor_device_type = s_ctrl->sensor_device_type;
 	sensor_i2c_client = s_ctrl->sensor_i2c_client;
@@ -436,6 +439,10 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 			__func__, __LINE__, power_info, sensor_i2c_client);
 		return -EINVAL;
 	}
+	/*                                                                       */
+	if(strncmp(s_ctrl->sensordata->sensor_name, "hi707", strlen("hi707")) == 0)
+		s_ctrl->isFirstStream = FALSE;
+	/*                                                                       */
 	return msm_camera_power_down(power_info, sensor_device_type,
 		sensor_i2c_client);
 }
@@ -454,7 +461,7 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 			__func__, __LINE__, s_ctrl);
 		return -EINVAL;
 	}
-
+	pr_err("%s:%d sensor_name %s Enter \n", __func__, __LINE__,s_ctrl->sensordata->sensor_name);
 	power_info = &s_ctrl->sensordata->power_info;
 	sensor_i2c_client = s_ctrl->sensor_i2c_client;
 	slave_info = s_ctrl->sensordata->slave_info;
@@ -487,6 +494,11 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 		}
 	}
 
+	/*                                                                       */
+	if(strncmp(s_ctrl->sensordata->sensor_name, "hi707", strlen("hi707")) == 0)
+		s_ctrl->isFirstStream = TRUE;
+	/*                                                                       */
+	pr_err("%s  sensor_name %s exit \n", __func__,s_ctrl->sensordata->sensor_name);
 	return rc;
 }
 
@@ -528,6 +540,7 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		pr_err("msm_sensor_match_id chip id doesnot match\n");
 		return -ENODEV;
 	}
+
 	return rc;
 }
 
@@ -609,14 +622,14 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			s_ctrl->sensordata->sensor_info->position;
 		cdata->cfg.sensor_info.modes_supported =
 			s_ctrl->sensordata->sensor_info->modes_supported;
-		CDBG("%s:%d sensor name %s\n", __func__, __LINE__,
+		pr_err("%s:%d sensor name %s\n", __func__, __LINE__,
 			cdata->cfg.sensor_info.sensor_name);
-		CDBG("%s:%d session id %d\n", __func__, __LINE__,
+		pr_err("%s:%d session id %d\n", __func__, __LINE__,
 			cdata->cfg.sensor_info.session_id);
 		for (i = 0; i < SUB_MODULE_MAX; i++)
-			CDBG("%s:%d subdev_id[%d] %d\n", __func__, __LINE__, i,
+			pr_err("%s:%d subdev_id[%d] %d\n", __func__, __LINE__, i,
 				cdata->cfg.sensor_info.subdev_id[i]);
-		CDBG("%s:%d mount angle valid %d value %d\n", __func__,
+		pr_err("%s:%d mount angle valid %d value %d\n", __func__,
 			__LINE__, cdata->cfg.sensor_info.is_mount_angle_valid,
 			cdata->cfg.sensor_info.sensor_mount_angle);
 
@@ -683,13 +696,13 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			rc = -EFAULT;
 			break;
 		}
-		CDBG("%s sensor id 0x%x\n", __func__,
+		pr_err("%s sensor id 0x%x\n", __func__,
 			sensor_slave_info.slave_addr);
-		CDBG("%s sensor addr type %d\n", __func__,
+		pr_err("%s sensor addr type %d\n", __func__,
 			sensor_slave_info.addr_type);
-		CDBG("%s sensor reg 0x%x\n", __func__,
+		pr_err("%s sensor reg 0x%x\n", __func__,
 			sensor_slave_info.sensor_id_info.sensor_id_reg_addr);
-		CDBG("%s sensor id 0x%x\n", __func__,
+		pr_err("%s sensor id 0x%x\n", __func__,
 			sensor_slave_info.sensor_id_info.sensor_id);
 		for (s_index = 0; s_index <
 			p_ctrl->power_setting_size; s_index++) {

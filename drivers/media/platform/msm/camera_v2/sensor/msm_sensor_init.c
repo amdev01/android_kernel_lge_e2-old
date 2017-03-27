@@ -20,7 +20,7 @@
 #include "msm_sd.h"
 
 /* Logging macro */
-/*#define CONFIG_MSMB_CAMERA_DEBUG*/
+#define CONFIG_MSMB_CAMERA_DEBUG
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
@@ -159,7 +159,7 @@ static int __init msm_sensor_init_module(void)
 	s_init->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x6;
 	ret = msm_sd_register(&s_init->msm_sd);
 	if (ret) {
-		CDBG("%s: msm_sd_register error = %d\n", __func__, rc);
+		CDBG("%s: msm_sd_register error = %d\n", __func__, ret);
 		goto error;
 	}
 

@@ -812,6 +812,189 @@ static struct msm_camera_i2c_fn_t msm_sensor_qup_func_tbl = {
 	.i2c_poll = msm_camera_qup_i2c_poll,
 };
 
+/*                                                                       */
+#define ACT_HW_PARAMS 0xF
+
+/*                                                                         */
+static int32_t msm_actuator_check_move_done(struct msm_actuator_ctrl_t * a_ctrl)
+{
+	uint16_t read_data, read_addr, read_cnt=0;
+
+	read_addr = 0xDC51;  //actuator ringing setting off
+	while (read_cnt<20){
+		msm_camera_cci_i2c_read(&a_ctrl->i2c_client, read_addr, &read_data, 2);
+		pr_err("%s : read data : 0x%x , cnt: %d\n",__func__, read_data, read_cnt);
+		if ((read_data&0x4000) == 0){
+			return 0;
+		}
+		msleep(5);
+		read_cnt++;
+	}
+	return -1;
+}
+/*                                                                         */
+
+static int msm_actuator_StablePosition_move(struct msm_actuator_ctrl_t * a_ctrl,
+	int16_t next_dac, int16_t hw_parms, unsigned int delay)
+{
+	int rc = 0;
+    /*                                                                                   */
+    struct msm_camera_i2c_reg_setting reg_setting;
+    /*                                                                                   */
+
+	if(next_dac >= 0) {
+		CDBG("%s: [next_dac = %d] [delay = %d]", __func__, next_dac, delay);
+
+		if(a_ctrl->i2c_reg_tbl != NULL){
+			a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl, next_dac, hw_parms, 0);
+//			rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_write_table_w_microdelay(
+//			&a_ctrl->i2c_client,
+//			a_ctrl->i2c_reg_tbl, a_ctrl->i2c_tbl_index,
+//			a_ctrl->i2c_data_type);
+        /*                                                                                   */
+        reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
+        reg_setting.data_type = a_ctrl->i2c_data_type;
+        reg_setting.size = a_ctrl->i2c_tbl_index;
+        rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_write_table_w_microdelay(
+            &a_ctrl->i2c_client, &reg_setting);
+        /*                                                                                   */
+
+			if (rc < 0) {
+				pr_err("%s: i2c write error:[1]%d\n",
+					__func__, rc);
+				return rc;
+			}
+			//                                                                                                                  
+			msm_actuator_check_move_done(a_ctrl); /*                                                                   */
+		}
+		else{
+			pr_err("%s: a_ctrl->i2c_reg_tbl == NULL\n",
+					__func__);
+			rc = -100;
+		}
+
+	}
+	return rc;
+}
+
+static int16_t msm_actuator_StablePosition_dac_calc(struct msm_actuator_ctrl_t * a_ctrl,
+	int16_t step_position)
+{
+	return a_ctrl->step_position_table[step_position];
+}
+
+static unsigned int msm_actuator_StablePosition_delay_calc(int16_t cur_dac, int16_t next_dac)
+{
+	//You can use the delay tuning
+	unsigned int delay = 0;
+	delay = (cur_dac - next_dac) * 2 / 3;
+	if(delay > 200) delay = 200;
+	else if(delay < 50) delay = 60;
+
+	//return delay;
+	return 0; /*                                                                                                  */
+}
+
+static int16_t msm_actuator_StablePosition_pos_calc(int16_t cur_pos)
+{
+	//You can use the actuator postion tuning
+#if defined(CONFIG_LG_OIS)
+	return 0;
+#else
+/*                                                                                   */
+#if 1
+	return cur_pos * 1 / 3; /*                                                                              */
+#else
+    int StablePosition_Pos_calc_value = 0;
+    if (cur_pos > 220)
+    {
+        StablePosition_Pos_calc_value = 220;
+    }
+    else if (cur_pos > 70 && cur_pos <= 220)
+    {
+        StablePosition_Pos_calc_value = cur_pos - 15;
+    }
+    else
+    {
+        StablePosition_Pos_calc_value = 0;
+    }
+    return StablePosition_Pos_calc_value;
+#endif
+/*                                                                                   */
+#endif
+}
+
+static int32_t msm_actuator_StablePosition(struct msm_actuator_ctrl_t *a_ctrl)
+{
+	int rc = 0;
+	unsigned int delay = 0;
+	int16_t cur_pos = 0, next_pos =0;
+	int16_t cur_dac = 0, next_dac = 0;
+	int16_t i =0;
+
+	if (a_ctrl->curr_step_pos != 0)
+	{
+		cur_pos = a_ctrl->curr_step_pos;
+
+      if (a_ctrl->step_position_table == NULL)
+         return -ENOMEM;
+
+		for(i = 0; i < 12; i++) { /*                                                                                 */
+			cur_dac = msm_actuator_StablePosition_dac_calc(a_ctrl, cur_pos);
+			next_pos = msm_actuator_StablePosition_pos_calc(cur_pos);
+			a_ctrl->i2c_tbl_index = 0;
+
+			if(next_pos > 0)
+			{
+				next_dac = msm_actuator_StablePosition_dac_calc(a_ctrl, next_pos);
+				delay = msm_actuator_StablePosition_delay_calc(cur_dac, next_dac);
+				rc = msm_actuator_StablePosition_move(a_ctrl, next_dac,
+					ACT_HW_PARAMS, delay);
+				if (rc < 0) {
+					pr_err("%s: i2c write error:[1]%d\n",
+						__func__, rc);
+					return rc;
+				}
+				cur_pos = next_pos;
+				a_ctrl->curr_step_pos = cur_pos;
+				a_ctrl->i2c_tbl_index = 0;
+			}
+			else if(next_pos == 0)
+			{
+				next_dac = msm_actuator_StablePosition_dac_calc(a_ctrl, next_pos);
+				//rc = msm_actuator_StablePosition_move(a_ctrl, next_dac, IMX135_ACT_HW_DAMPING_LAST, 110);
+				/*                                                                      */
+				rc = msm_actuator_StablePosition_move(a_ctrl, next_dac, ACT_HW_PARAMS, delay);
+				if (rc < 0) {
+					pr_err("%s: i2c write error:[1]%d\n",
+						__func__, rc);
+					return rc;
+				}
+				cur_pos = next_pos;
+				a_ctrl->curr_step_pos = cur_pos;
+				a_ctrl->i2c_tbl_index = 0;
+				break;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+	}
+/*                                                                         */
+#if 0
+	a_ctrl->i2c_tbl_index = 0;
+	msleep(50); // delay can be changed but put max due to it's small enough
+	a_ctrl->curr_step_pos = 0;
+#endif
+/*                                                                         */
+	CDBG("%s: called\n", __func__);
+
+	return rc;
+}
+/*                                                                       */
+
 static int msm_actuator_close(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh) {
 	int rc = 0;
@@ -821,6 +1004,9 @@ static int msm_actuator_close(struct v4l2_subdev *sd,
 		pr_err("failed\n");
 		return -EINVAL;
 	}
+/*                                                                       */
+	msm_actuator_StablePosition(a_ctrl);
+/*                                                                       */
 	if (a_ctrl->act_device_type == MSM_CAMERA_PLATFORM_DEVICE) {
 		rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_util(
 			&a_ctrl->i2c_client, MSM_CCI_RELEASE);

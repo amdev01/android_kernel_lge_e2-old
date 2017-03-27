@@ -1357,6 +1357,12 @@ static int msm_cpp_cfg(struct cpp_device *cpp_dev,
 	unsigned long in_phyaddr, out_phyaddr0, out_phyaddr1;
 	uint16_t num_stripes = 0;
 	struct msm_buf_mngr_info buff_mgr_info, dup_buff_mgr_info;
+	//                                                                                       
+#if 0 //deprecated old codes
+	struct msm_cpp_frame_info_t *u_frame_info =
+		(struct msm_cpp_frame_info_t *)ioctl_ptr->ioctl_ptr;
+#endif
+	//                                                                                       
 	int32_t status = 0;
 	int32_t stripe_base = 0;
 
@@ -1422,7 +1428,7 @@ static int msm_cpp_cfg(struct cpp_device *cpp_dev,
 			&buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_debug("error getting buffer rc:%d\n", rc);
+			pr_err("error getting buffer rc:%d\n", rc);
 			goto ERROR2;
 		}
 		new_frame->output_buffer_info[0].index = buff_mgr_info.index;
@@ -1455,7 +1461,7 @@ static int msm_cpp_cfg(struct cpp_device *cpp_dev,
 			&dup_buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_debug("error getting buffer rc:%d\n", rc);
+			pr_err("error getting buffer rc:%d\n", rc);
 			goto ERROR3;
 		}
 		new_frame->output_buffer_info[1].index =
@@ -1523,8 +1529,17 @@ static int msm_cpp_cfg(struct cpp_device *cpp_dev,
 
 	ioctl_ptr->trans_code = rc;
 	status = rc;
+
+	//                                                                                       
+#if 1
 	rc = (copy_to_user((void __user *)new_frame->status, &status,
 		sizeof(int32_t)) ? -EFAULT : 0);
+#else //deprecated old codes
+	rc = (copy_to_user((void __user *)u_frame_info->status, &status,
+		sizeof(int32_t)) ? -EFAULT : 0);
+#endif
+	//                                                                                       
+
 	if (rc) {
 		ERR_COPY_FROM_USER();
 		rc = -EINVAL;
@@ -1540,12 +1555,24 @@ ERROR3:
 ERROR2:
 	kfree(cpp_frame_msg);
 ERROR1:
+	//                                                                                       
+#if 1
 	ioctl_ptr->trans_code = rc;
 	status = rc;
 	if (copy_to_user((void __user *)new_frame->status, &status,
 		sizeof(int32_t)))
 		pr_err("error cannot copy error\n");
 	kfree(new_frame);
+#else //deprecated old codes
+	kfree(new_frame);
+	ioctl_ptr->trans_code = rc;
+	status = rc;
+	if (copy_to_user((void __user *)new_frame->status, &status,
+		sizeof(int32_t)))
+		pr_err("error cannot copy error\n");
+#endif
+	//                                                                                       
+
 	return rc;
 }
 
@@ -1645,6 +1672,8 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_CPP_CFG:
 		CPP_DBG("VIDIOC_MSM_CPP_CFG\n");
 		rc = msm_cpp_cfg(cpp_dev, ioctl_ptr);
+		if (rc < 0)
+			pr_err("%s: error in cpp_cfg\n", __func__); /*                                                        */
 		break;
 	case VIDIOC_MSM_CPP_FLUSH_QUEUE:
 		CPP_DBG("VIDIOC_MSM_CPP_FLUSH_QUEUE\n");

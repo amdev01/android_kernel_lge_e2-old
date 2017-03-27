@@ -729,8 +729,8 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 
 	if (timeout < 0) {
 		mutex_unlock(&session->lock);
-		pr_err("%s : timeout cannot be negative Line %d\n",
-				__func__, __LINE__);
+                if(event->id != MSM_CAMERA_DEL_SESSION)  /*                                                                       */
+		    pr_err("%s : timeout cannot be negative Line %d\n",__func__, __LINE__);
 		return rc;
 	}
 
@@ -851,7 +851,7 @@ static int msm_open(struct file *filep)
 	spin_lock_irqsave(&msm_eventq_lock, flags);
 	msm_eventq = filep->private_data;
 	spin_unlock_irqrestore(&msm_eventq_lock, flags);
-
+       pr_err("%s: rc = %d\n", __func__, rc);
 	return rc;
 }
 
