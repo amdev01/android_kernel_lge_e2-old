@@ -400,6 +400,14 @@ enum msm_sensor_cfg_type_t {
 	CFG_SET_AUTOFOCUS,
 	CFG_CANCEL_AUTOFOCUS,
 	CFG_SET_STREAM_TYPE,
+	CFG_PAGE_MODE_READ_I2C_ARRAY,	/*                                                            */
+	CFG_SET_FRAMERATE_FOR_SOC,		/*                                                                     */
+/*                                                                              */
+	CFG_SET_AEC_ROI,
+	CFG_SET_AWB_LOCK,
+	CFG_SET_AEC_LOCK,
+	CFG_SET_INIT_SETTING_VT,
+/*                                                                              */
 };
 
 enum msm_actuator_cfg_type_t {
