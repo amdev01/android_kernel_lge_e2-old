@@ -3902,7 +3902,7 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 	}
 
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
-			true);
+			false); //QCT org is true
 
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;

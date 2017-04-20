@@ -49,6 +49,10 @@
 #define SPECIAL_HS_DETECT_TIME_MS (2 * 1000)
 #define MBHC_BUTTON_PRESS_THRESHOLD_MIN 250
 #define GND_MIC_SWAP_THRESHOLD 4
+//          
+char *button_name[4] = {"Hook Key", "Voice Assist", "Volume Up", "Volume Down"};
+#define KEY_VOICE_ASSIST 582
+//          
 #define WCD_FAKE_REMOVAL_MIN_PERIOD_MS 100
 #define HS_VREF_MIN_VAL 1400
 #define FW_READ_ATTEMPTS 15
@@ -58,6 +62,34 @@ static int det_extn_cable_en;
 module_param(det_extn_cable_en, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(det_extn_cable_en, "enable/disable extn cable detect");
+
+//                                     
+enum {
+	NO_DEVICE   = 0,
+	LGE_HEADSET = (1 << 0),
+	LGE_HEADSET_NO_MIC = (1 << 1),
+};
+
+static ssize_t lge_hsd_print_name(struct switch_dev *sdev, char *buf)
+{
+	switch (switch_get_state(sdev)) {
+		case NO_DEVICE:
+			return sprintf(buf, "No Device");
+		case LGE_HEADSET:
+			return sprintf(buf, "Headset");
+		case LGE_HEADSET_NO_MIC:
+			return sprintf(buf, "Headset");
+		default:
+			break;
+	}
+	return -EINVAL;
+}
+
+static ssize_t lge_hsd_print_state(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "%d\n", switch_get_state(sdev));
+}
+//                                     
 
 #define WCD_MBHC_RSC_LOCK(mbhc)			\
 {							\
@@ -118,7 +150,31 @@ static void wcd_configure_cap(struct wcd_mbhc *mbhc, bool micbias2)
 static void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 				struct snd_soc_jack *jack, int status, int mask)
 {
+	pr_info("[LGE MBHC] %s: status : %d , mask : 0x%x\n", __func__,status,mask);
 	snd_soc_jack_report_no_dapm(jack, status, mask);
+//                                     
+	{
+		if(mask == WCD_MBHC_JACK_MASK)
+		{
+			if (status == SND_JACK_HEADPHONE)
+			{
+				switch_set_state(&mbhc->sdev, LGE_HEADSET_NO_MIC);
+			}
+			else if(status == SND_JACK_HEADSET)
+			{
+				switch_set_state(&mbhc->sdev, LGE_HEADSET);
+			}
+			else if(status == 0)
+			{
+				switch_set_state(&mbhc->sdev, NO_DEVICE);
+			}
+			else
+			{
+				pr_debug("%s: not reported to switch_dev\n", __func__);
+			}
+		}
+	}
+//                                     
 }
 
 static void __hphocp_off_report(struct wcd_mbhc *mbhc, u32 jack_status,
@@ -692,6 +748,9 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 
 	pr_debug("%s: enter insertion %d hph_status %x\n",
 		 __func__, insertion, mbhc->hph_status);
+	pr_info("[LGE MBHC] %s is %s. jack_type=%x",
+				(jack_type-1)?"4 Pin Headset":"3 Pin Headphone",
+				insertion?"Inserted":"Removed", jack_type);
 	if (!insertion) {
 		/* Report removal */
 		mbhc->hph_status &= ~jack_type;
@@ -1033,9 +1092,15 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 			}
 		}
 		if (result2 == 1) {
+#if 1	/*                                                                   */
+			pr_info("[LGE MBHC] detect as 4Pin and then HIGH_HPH. Force 4Pin Headset.\n");
+			plug_type = MBHC_PLUG_TYPE_HEADSET;
+			wrk_complete = false;
+#else	/* Qualcomm Orig. */
 			pr_debug("%s: cable is extension cable\n", __func__);
 			plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
 			wrk_complete = true;
+#endif
 		} else {
 			pr_debug("%s: cable might be headset: %d\n", __func__,
 					plug_type);
@@ -1216,6 +1281,29 @@ static void wcd_mbhc_detect_plug_type(struct wcd_mbhc *mbhc)
 			goto exit;
 		}
 	}
+
+	/*                                                                                   */
+	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH &&
+		(!det_extn_cable_en)) {
+			pr_info("[LGE MBHC] %s: Apple headset or AUX cable is found. Force 4pin Headset. plug_type:0x%x\n",
+					 __func__, plug_type);
+
+			mbhc->micbias_enable = true;
+			plug_type = MBHC_PLUG_TYPE_HEADSET;
+
+			snd_soc_update_bits(codec,
+					MSM8X16_WCD_A_ANALOG_MICB_2_EN,
+					0x80, 0x00);
+
+			/* Disable external voltage source to micbias if present */
+			if (mbhc->mbhc_cb && mbhc->mbhc_cb->enable_mb_source)
+				mbhc->mbhc_cb->enable_mb_source(codec, false);
+
+			wcd_mbhc_find_plug_and_report(mbhc, plug_type);
+			goto out;
+	/*            */
+	}
+
 exit:
 	pr_debug("%s: Valid plug found, plug type is %d\n",
 			 __func__, plug_type);
@@ -1226,6 +1314,10 @@ exit:
 	} else {
 		wcd_schedule_hs_detect_plug(mbhc, &mbhc->correct_plug_swch);
 	}
+/*                                                                                      */
+#if 1
+out:
+#endif
 	pr_debug("%s: leave\n", __func__);
 }
 
@@ -1300,15 +1392,18 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 				0x04, 0x00);
 		wcd_configure_cap(mbhc, false);
 		mbhc->btn_press_intr = false;
+
+		/* make sure to turn off Rbias */
+		snd_soc_update_bits(codec,
+			MSM8X16_WCD_A_ANALOG_MICB_1_INT_RBIAS,
+			0x10, 0x00);
+
 		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE) {
 			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
 		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
 			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_UNSUPPORTED);
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);	//           
 		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
-			/* make sure to turn off Rbias */
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MICB_1_INT_RBIAS,
-					0x18, 0x08);
 			snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_MICB_2_EN,
 					0x20, 0x20);
@@ -1364,16 +1459,16 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 	int r = IRQ_HANDLED;
 	struct wcd_mbhc *mbhc = data;
 
-	pr_debug("%s: enter\n", __func__);
+	pr_info("[LGE MBHC] %s: enter\n", __func__);
 	if (unlikely(wcd9xxx_spmi_lock_sleep() == false)) {
-		pr_warn("%s: failed to hold suspend\n", __func__);
+		pr_warn("[LGE MBHC] %s: failed to hold suspend\n", __func__);
 		r = IRQ_NONE;
 	} else {
 		/* Call handler */
 		wcd_mbhc_swch_irq_handler(mbhc);
 		wcd9xxx_spmi_unlock_sleep();
 	}
-	pr_debug("%s: leave %d\n", __func__, r);
+	pr_info("[LGE MBHC] %s: leave %d\n", __func__, r);
 	return r;
 }
 
@@ -1384,20 +1479,25 @@ static int wcd_mbhc_get_button_mask(u16 btn)
 	switch (btn) {
 	case 0:
 		mask = SND_JACK_BTN_0;
+		pr_info("[LGE MBHC] SND_JACK_BTN_0\n");
 		break;
 	case 1:
 		mask = SND_JACK_BTN_1;
+		pr_info("[LGE MBHC] SND_JACK_BTN_1\n");
 		break;
 	case 3:
 		mask = SND_JACK_BTN_2;
+		pr_info("[LGE MBHC] SND_JACK_BTN_2\n");
 		break;
 	case 7:
 		mask = SND_JACK_BTN_3;
+		pr_info("[LGE MBHC] SND_JACK_BTN_3\n");
 		break;
 	case 15:
-		mask = SND_JACK_BTN_4;
+		pr_info("[LGE MBHC] SND_JACK_BTN_4 : F60 isn't using this button.\n");
 		break;
 	default:
+		pr_info("[LGE MBHC] SND_JACK_BTN_default : F60 isn't using this button.\n");
 		break;
 	}
 	return mask;
@@ -1597,6 +1697,8 @@ static void wcd_btn_lpress_fn(struct work_struct *work)
 			 __func__, result1);
 		wcd_mbhc_jack_report(mbhc, &mbhc->button_jack,
 				mbhc->buttons_pressed, mbhc->buttons_pressed);
+		pr_info("[LGE MBHC] Headset LONG Button : %s is pressed.\n",
+					button_name[(mbhc->buttons_pressed>>24)*-1/2+2]);
 	}
 	pr_debug("%s: leave\n", __func__);
 	wcd9xxx_spmi_unlock_sleep();
@@ -1634,13 +1736,13 @@ irqreturn_t wcd_mbhc_btn_press_handler(int irq, void *data)
 	int mask;
 	unsigned long msec_val;
 
-	pr_debug("%s: enter\n", __func__);
+	pr_info("[LGE MBHC] %s: enter\n", __func__);
 	WCD_MBHC_RSC_LOCK(mbhc);
 	/* send event to sw intr handler*/
 	mbhc->is_btn_press = true;
 	wake_up_interruptible(&mbhc->wait_btn_press);
 	if (wcd_swch_level_remove(mbhc)) {
-		pr_debug("%s: Switch level is low ", __func__);
+		pr_info("[LGE MBHC] %s: Switch level is low ", __func__);
 		goto done;
 	}
 	mbhc->btn_press_intr = true;
@@ -1648,39 +1750,46 @@ irqreturn_t wcd_mbhc_btn_press_handler(int irq, void *data)
 	msec_val = jiffies_to_msecs(jiffies - mbhc->jiffies_atreport);
 	pr_debug("%s: msec_val = %ld\n", __func__, msec_val);
 	if (msec_val < MBHC_BUTTON_PRESS_THRESHOLD_MIN) {
-		pr_debug("%s: Too short, ignore button press\n", __func__);
+		pr_info("[LGE MBHC] %s: Too short, ignore button press\n", __func__);
 		goto done;
 	}
 
 	/* If switch interrupt already kicked in, ignore button press */
 	if (mbhc->in_swch_irq_handler) {
-		pr_debug("%s: Swtich level changed, ignore button press\n",
+		pr_info("[LGE MBHC] %s: Swtich level changed, ignore button press\n",
 			 __func__);
 		goto done;
 	}
 	if (mbhc->current_plug != MBHC_PLUG_TYPE_HEADSET) {
 		if (mbhc->current_plug == MBHC_PLUG_TYPE_HIGH_HPH) {
-			pr_debug("%s: Ignore this button press\n",
+			pr_info("[LGE MBHC] %s: Ignore this button press\n",
 					__func__);
 			mbhc->btn_press_intr = false;
 			mbhc->is_btn_press = false;
 			goto done;
 		}
-		pr_debug("%s: Plug isn't headset, ignore button press\n",
+		pr_info("[LGE MBHC] %s: Plug isn't headset, ignore button press\n",
 				__func__);
 		goto done;
 	}
 	result1 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
 	mask = wcd_mbhc_get_button_mask(result1);
+
+	/*                                                    */
+	if (!mask) {
+		pr_info("[LGE MBHC] Unsupported button event, ignore button press.\n");
+		goto done;
+	}
+
 	mbhc->buttons_pressed |= mask;
 	wcd9xxx_spmi_lock_sleep();
 	if (schedule_delayed_work(&mbhc->mbhc_btn_dwork,
 				msecs_to_jiffies(400)) == 0) {
-		WARN(1, "Button pressed twice without release event\n");
+		WARN(1, "[LGE MBHC] Button pressed twice without release event\n");
 		wcd9xxx_spmi_unlock_sleep();
 	}
 done:
-	pr_debug("%s: leave\n", __func__);
+	pr_info("[LGE MBHC] %s: leave\n", __func__);
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 	return IRQ_HANDLED;
 }
@@ -1690,17 +1799,17 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 	struct wcd_mbhc *mbhc = data;
 	int ret;
 
-	pr_debug("%s: enter\n", __func__);
+	pr_info("[LGE MBHC] %s: enter\n", __func__);
 	WCD_MBHC_RSC_LOCK(mbhc);
 	if (wcd_swch_level_remove(mbhc)) {
-		pr_debug("%s: Switch level is low ", __func__);
+		pr_info("[LGE MBHC] %s: Switch level is low\n", __func__);
 		goto exit;
 	}
 
 	if (mbhc->btn_press_intr) {
 		mbhc->btn_press_intr = false;
 	} else {
-		pr_debug("%s: This release is for fake btn press\n", __func__);
+		pr_info("[LGE MBHC] %s: This release is for fake btn press\n", __func__);
 		goto exit;
 	}
 
@@ -1710,6 +1819,10 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 	 * headset not headphone.
 	 */
 	if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE) {
+//                                  
+		wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
+		mbhc->current_plug = MBHC_PLUG_TYPE_HEADSET;
+//           
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADSET);
 		goto exit;
 
@@ -1719,21 +1832,27 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 		if (ret == 0) {
 			pr_debug("%s: Reporting long button release event\n",
 				 __func__);
+			pr_info("[LGE MBHC] Headset LONG Button : %s is released.\n",
+						button_name[(mbhc->buttons_pressed>>24)*-1/2+2]);
 			wcd_mbhc_jack_report(mbhc, &mbhc->button_jack,
 					0, mbhc->buttons_pressed);
 		} else {
 			if (mbhc->in_swch_irq_handler) {
-				pr_debug("%s: Switch irq kicked in, ignore\n",
+				pr_info("[LGE MBHC] %s: Switch irq kicked in, ignore\n",
 					__func__);
 			} else {
 				pr_debug("%s: Reporting btn press\n",
 					 __func__);
+				pr_info("[LGE MBHC] Headset Button : %s is pressed.\n",
+							button_name[(mbhc->buttons_pressed>>24)*-1/2+2]);
 				wcd_mbhc_jack_report(mbhc,
 						     &mbhc->button_jack,
 						     mbhc->buttons_pressed,
 						     mbhc->buttons_pressed);
 				pr_debug("%s: Reporting btn release\n",
 					 __func__);
+				pr_info("[LGE MBHC] Headset Button : %s is released.\n",
+							button_name[(mbhc->buttons_pressed>>24)*-1/2+2]);
 				wcd_mbhc_jack_report(mbhc,
 						&mbhc->button_jack,
 						0, mbhc->buttons_pressed);
@@ -1742,7 +1861,7 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 		mbhc->buttons_pressed &= ~WCD_MBHC_JACK_BUTTON_MASK;
 	}
 exit:
-	pr_debug("%s: leave\n", __func__);
+	pr_info("[LGE MBHC] %s: leave\n", __func__);
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 	return IRQ_HANDLED;
 }
@@ -2055,8 +2174,49 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 			return ret;
 		}
 
-		INIT_DELAYED_WORK(&mbhc->mbhc_firmware_dwork,
-				  wcd_mbhc_fw_read);
+//          
+		ret = snd_jack_set_key(mbhc->button_jack.jack,
+				       SND_JACK_BTN_1,
+				       KEY_VOICE_ASSIST);
+		if (ret) {
+			pr_err("%s: Failed to set code for btn-1\n",
+				__func__);
+			return ret;
+		}
+
+		ret = snd_jack_set_key(mbhc->button_jack.jack,
+				       SND_JACK_BTN_2,
+				       KEY_VOLUMEUP);
+		if (ret) {
+			pr_err("%s: Failed to set code for btn-2\n",
+				__func__);
+			return ret;
+		}
+
+		ret = snd_jack_set_key(mbhc->button_jack.jack,
+				       SND_JACK_BTN_3,
+				       KEY_VOLUMEDOWN);
+		if (ret) {
+			pr_err("%s: Failed to set code for btn-3\n",
+				__func__);
+			return ret;
+		}
+//                                     
+		{
+			mbhc->sdev.name = "h2w";
+			mbhc->sdev.print_state = lge_hsd_print_state;
+			mbhc->sdev.print_name = lge_hsd_print_name;
+
+			ret = switch_dev_register(&mbhc->sdev);
+			if (ret < 0) {
+				pr_err("[MBHC]Failed to register switch device\n");
+				switch_dev_unregister(&mbhc->sdev);
+			}
+		}
+//                                     
+//          
+        INIT_DELAYED_WORK(&mbhc->mbhc_firmware_dwork,
+                          wcd_mbhc_fw_read);
 		INIT_DELAYED_WORK(&mbhc->mbhc_btn_dwork, wcd_btn_lpress_fn);
 	}
 
@@ -2164,6 +2324,10 @@ EXPORT_SYMBOL(wcd_mbhc_init);
 void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 {
 	struct snd_soc_codec *codec = mbhc->codec;
+
+//                                     
+	switch_dev_unregister(&mbhc->sdev);
+//                                     
 
 	wcd9xxx_spmi_free_irq(mbhc->intr_ids->mbhc_sw_intr, mbhc);
 	wcd9xxx_spmi_free_irq(mbhc->intr_ids->mbhc_btn_press_intr, mbhc);
