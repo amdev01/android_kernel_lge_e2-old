@@ -22,42 +22,28 @@
 #include <linux/module.h>
 #include <mach/board_lge.h>
 
+/*             
+                          
+                                
+*/
+
 static struct pre_selfd_platform_data *pre_selfd_pdata;
 static char pre_selfd_buf[4096];
 unsigned int selfd_cnt= 0;
 
+
 static ssize_t pre_selfd_store(struct device *dev, struct device_attribute *attr,
-        const char *buf, size_t count)
+						const char *buf, size_t count)
 {
-    char str[512];
-    int str_len = 0;
-    if ( !lge_get_factory_boot() ) return -EINVAL;
-
-    if ( buf[0] =='$' )
-    {
-        memset(pre_selfd_buf, 0, 4096); selfd_cnt = 0;
-        return -EINVAL;
-    }
-    str_len = sprintf(str, "%s", buf);
-    if ( (selfd_cnt+str_len) > 4096 )
-    {
-        sprintf((char *) &pre_selfd_buf[selfd_cnt], "$");
-        selfd_cnt++;
-        return selfd_cnt;
-    }
-
-    sprintf((char *) &pre_selfd_buf[selfd_cnt], "%s", buf);
-    selfd_cnt += str_len;
-
-    return selfd_cnt;
+	return 0;
 }
 
 static ssize_t pre_selfd_show(struct device *dev, struct device_attribute *attr,
-        char *buf)
+								char *buf)
 {
-    ssize_t ret_len = 0;
-    ret_len = snprintf(buf, PAGE_SIZE, "%s", pre_selfd_buf);
-    return ret_len;
+        ssize_t ret_len = 0;
+        ret_len = snprintf(buf, PAGE_SIZE, "%s", pre_selfd_buf);
+        return ret_len;
 
 }
 
@@ -65,46 +51,45 @@ static DEVICE_ATTR(pre_selfd, 0644, pre_selfd_show, pre_selfd_store);
 
 int lge_pre_self_diagnosis(char *drv_bus_code, int func_code, char *dev_code, char *drv_code, int errno)
 {
-    char str[512];
-    int str_len = 0;
-    if ( !lge_get_factory_boot() ) return 1;
+	char str[512];
+	int str_len = 0;
+        if ( !lge_get_factory_boot() ) return 1;
 
-    str_len = sprintf(str, "%s|%d|%s|%s|%d\n", drv_bus_code, func_code, dev_code, drv_code, errno);
-    if ( (selfd_cnt+str_len) > 4096 )
-    {
-        sprintf((char *) &pre_selfd_buf[selfd_cnt], "$");
-        selfd_cnt++;
-        return 1;
-    }
+	str_len = sprintf(str, "%s|%d|%s|%s|%d\n", drv_bus_code, func_code, dev_code, drv_code, errno);
+        if ( (selfd_cnt+str_len) > 4096 )
+	{
+		sprintf((char *) &pre_selfd_buf[selfd_cnt], "$");
+		return 1;
+	}
 
-    sprintf((char *) &pre_selfd_buf[selfd_cnt], "%s|%d|%s|%s|%d\n", drv_bus_code, func_code, dev_code, drv_code, errno);
-    selfd_cnt += str_len;
+	sprintf((char *) &pre_selfd_buf[selfd_cnt], "%s|%d|%s|%s|%d\n", drv_bus_code, func_code, dev_code, drv_code, errno);
+	selfd_cnt += str_len;
 
-    return 0;
+        return 0;
 }
 
 static int pre_selfd_ctrl_probe(struct platform_device *pdev)
 {
-    int rc = 0;
+	int rc = 0;
 
-    pre_selfd_pdata = pdev->dev.platform_data;
+	pre_selfd_pdata = pdev->dev.platform_data;
 
-    rc = device_create_file(&pdev->dev, &dev_attr_pre_selfd);
-    if (rc != 0)
-        return -1;
-    return 0;
+	rc = device_create_file(&pdev->dev, &dev_attr_pre_selfd);
+	if (rc != 0)
+		return -1;
+	return 0;
 }
 
 static struct platform_driver this_driver = {
-    .probe  = pre_selfd_ctrl_probe,
-    .driver = {
-        .name   = "pre_selfd_ctrl",
-    },
+	.probe  = pre_selfd_ctrl_probe,
+	.driver = {
+	.name   = "pre_selfd_ctrl",
+	},
 };
 
 int __init pre_selfd_ctrl_init(void)
 {
-    return platform_driver_register(&this_driver);
+	return platform_driver_register(&this_driver);
 }
 
 device_initcall(pre_selfd_ctrl_init);

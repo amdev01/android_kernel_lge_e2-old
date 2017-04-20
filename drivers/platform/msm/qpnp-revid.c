@@ -27,7 +27,6 @@
 #define QPNP_REVID_DEV_NAME "qcom,qpnp-revid"
 
 bool is_pmic_rev_2 = false;	/*                                      */
-
 static const char *const pmic_names[] = {
 	"Unknown PMIC",
 	"PM8941",
@@ -38,9 +37,11 @@ static const char *const pmic_names[] = {
 	"PMA8084",
 	"PMI8962",
 	"PMD9635",
-	"PMPlutonium",
-	"PMIPlutonium",
+	"PM8994",
+	"PMI8994",
 	"PM8916",
+	"PM8004",
+	"PM8909",
 };
 
 struct revid_chip {

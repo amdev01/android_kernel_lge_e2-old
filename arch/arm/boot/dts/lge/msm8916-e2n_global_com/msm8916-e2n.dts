@@ -13,8 +13,8 @@
 /dts-v1/;
 
 #include "../msm8916-lge-common/msm8916-lge.dtsi"
-#include "msm8916-e2n.dtsi"
 #include "../../qcom/msm8916-memory.dtsi"
+#include "msm8916-e2n.dtsi"
 
 / {
 	model = "Qualcomm MSM 8916, E2N Global Com";

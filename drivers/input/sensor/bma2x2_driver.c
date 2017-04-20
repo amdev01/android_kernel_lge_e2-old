@@ -71,7 +71,7 @@
 #define SLOPE_Y_INDEX			6
 #define SLOPE_Z_INDEX			7
 #define BMA2X2_MAX_DELAY		200
-#define BMA2X2_RANGE_SET		3  /* +/- 2G */
+#define BMA2X2_RANGE_SET		BMA2X2_RANGE_4G   /* +/- 2G */
 
 #define LOW_G_INTERRUPT             REL_Z
 #define HIGH_G_INTERRUPT            REL_HWHEEL
@@ -1244,9 +1244,9 @@
 #define BMA_MAX_RETRY_I2C_XFER (100)
 
 #ifdef BMA2X2_ACCEL_CALIBRATION
-/* calibration tilt limit against x/y axis pre-calculated by "RAW_VALUE(16384) * sin (18 deg)" */
-#define BMA2X2_FAST_CALIB_TILT_LIMIT	5000
-#define BMA2X2_SHAKING_DETECT_THRESHOLD	(5000)
+/* calibration tilt limit against x/y axis pre-calculated by "RAW_VALUE(8192) * sin (18 deg) in 4g range" */
+#define BMA2X2_FAST_CALIB_TILT_LIMIT	2500
+#define BMA2X2_SHAKING_DETECT_THRESHOLD	(2500)
 #define BMA2X2_FAST_CALIB_DONE      REL_RX
 #endif
 
@@ -5830,8 +5830,7 @@ static int bma2x2_set_cal_trigger_fast_cal(struct i2c_client *client)
 	unsigned char timeout = 0;
 
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-	if(atomic_read(&bma2x2->fast_calib_rslt) != 0)
-	{
+	if (atomic_read(&bma2x2->fast_calib_rslt) != 0)	{
 		atomic_set(&bma2x2->fast_calib_rslt, 0);
 		PINFO("[set] bma2X2->fast_calib_rslt:%d",atomic_read(&bma2x2->fast_calib_rslt));
 	}
@@ -5978,7 +5977,7 @@ static ssize_t bma2x2_fast_calibration_store(struct device *dev,
 					|| abs(acc_cal.x) > BMA2X2_FAST_CALIB_TILT_LIMIT)
 					tilt_check_count++;
 				if (tilt_check_count > 5) {
-					atomic_set(&bma2x2->fast_calib_rslt, 0);
+					atomic_set(&bma2x2->fast_calib_rslt, 2);
 					PERR("============tilted over 15 degree===========");
 					return -EINVAL;
 				}

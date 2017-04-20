@@ -1,25 +1,5 @@
 /*
- * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
- */
-/*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,14 +19,19 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+/*
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
+ */
 
 /**=========================================================================
-
+  
   \file  sme_Qos.c
-
+  
   \brief implementation for SME QoS APIs
-
-
+  
+  
   ========================================================================*/
 /* $Header$ */
 /*--------------------------------------------------------------------------
@@ -64,8 +49,12 @@
 #include "smsDebug.h"
 #include "utilsParser.h"
 #endif
-#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
-#include <csrCcx.h>
+#if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
+#include <csrEse.h>
+#endif
+
+#ifdef DEBUG_ROAM_DELAY
+#include "vos_utils.h"
 #endif
 
 #ifndef WLAN_MDM_CODE_REDUCTION_OPT
@@ -1115,7 +1104,7 @@ eHalStatus sme_QosCsrEventInd(tpAniSirGlobal pMac,
       case SME_QOS_CSR_PREAUTH_SUCCESS_IND:
          status = sme_QosProcessPreauthSuccessInd(pMac, sessionId, pEvent_info);
          break;
-#if defined(FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if defined(FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
       case SME_QOS_CSR_SET_KEY_SUCCESS_IND:
          status = sme_QosProcessSetKeySuccessInd(pMac, sessionId, pEvent_info);
          break;
@@ -1903,6 +1892,32 @@ sme_QosStatusType sme_QosInternalModifyReq(tpAniSirGlobal pMac,
 
      return SME_QOS_STATUS_MODIFY_SETUP_INVALID_PARAMS_RSP;
    }
+
+   //should not be same as previous ioctl parameters
+   if ((pQoSInfo->nominal_msdu_size == flow_info->QoSInfo.nominal_msdu_size) &&
+       (pQoSInfo->maximum_msdu_size == flow_info->QoSInfo.maximum_msdu_size) &&
+       (pQoSInfo->min_data_rate == flow_info->QoSInfo.min_data_rate) &&
+       (pQoSInfo->mean_data_rate == flow_info->QoSInfo.mean_data_rate) &&
+       (pQoSInfo->peak_data_rate == flow_info->QoSInfo.peak_data_rate) &&
+       (pQoSInfo->min_service_interval ==
+                  flow_info->QoSInfo.min_service_interval) &&
+       (pQoSInfo->max_service_interval ==
+                  flow_info->QoSInfo.max_service_interval) &&
+       (pQoSInfo->inactivity_interval ==
+                  flow_info->QoSInfo.inactivity_interval) &&
+       (pQoSInfo->suspension_interval ==
+                  flow_info->QoSInfo.suspension_interval) &&
+       (pQoSInfo->surplus_bw_allowance ==
+                  flow_info->QoSInfo.surplus_bw_allowance))
+   {
+     VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+               "%s: %d: the addts parameters are same as last request,"
+               "dropping the current request",
+               __func__, __LINE__);
+
+     return SME_QOS_STATUS_MODIFY_SETUP_FAILURE_RSP;
+   }
+
    // need to vote off powersave for the duration of this request
    pSession->readyForPowerSave = VOS_FALSE;
    // assume we won't have to (re)buffer the command
@@ -2518,7 +2533,7 @@ sme_QosStatusType sme_QosInternalReleaseReq(tpAniSirGlobal pMac,
       {
          // this is the only flow aggregated in this TSPEC
          status = SME_QOS_STATUS_RELEASE_SUCCESS_RSP;
-#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
+#if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
          if (ac == SME_QOS_EDCA_AC_VO)
          {
             // Indicate to neighbor roam logic of the new required VO
@@ -2854,7 +2869,7 @@ sme_QosStatusType sme_QosSetup(tpAniSirGlobal pMac,
    }
 
    VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
-             "%s: UAPSD/PSB set %d: ", __func__, __LINE__,
+             "%s: %d: UAPSD/PSB set %d: ", __func__, __LINE__,
              pTspec_Info->ts_info.psb);
 
    pACInfo = &pSession->ac_info[ac];
@@ -3039,7 +3054,7 @@ sme_QosStatusType sme_QosSetup(tpAniSirGlobal pMac,
    return status;
 }
 
-#if defined(FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if defined(FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
 /* This is a dummy function now. But the purpose of me adding this was to 
  * delay the TSPEC processing till SET_KEY completes. This function can be 
  * used to do any SME_QOS processing after the SET_KEY. As of now, it is 
@@ -3055,9 +3070,9 @@ eHalStatus sme_QosProcessSetKeySuccessInd(tpAniSirGlobal pMac, v_U8_t sessionId,
 }
 #endif
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
 /*--------------------------------------------------------------------------
-  \brief sme_QosCCXSaveTspecResponse() - This function saves the TSPEC
+  \brief sme_QosESESaveTspecResponse() - This function saves the TSPEC
          parameters that came along in the TSPEC IE in the reassoc response
   
   \param pMac - Pointer to the global MAC parameter structure.
@@ -3068,7 +3083,7 @@ eHalStatus sme_QosProcessSetKeySuccessInd(tpAniSirGlobal pMac, v_U8_t sessionId,
   
   \return eHAL_STATUS_SUCCESS - Release is successful.
   --------------------------------------------------------------------------*/
-eHalStatus sme_QosCCXSaveTspecResponse(tpAniSirGlobal pMac, v_U8_t sessionId, tDot11fIEWMMTSPEC *pTspec, v_U8_t ac, v_U8_t tspecIndex)
+eHalStatus sme_QosESESaveTspecResponse(tpAniSirGlobal pMac, v_U8_t sessionId, tDot11fIEWMMTSPEC *pTspec, v_U8_t ac, v_U8_t tspecIndex)
 {
     tpSirAddtsRsp pAddtsRsp = &sme_QosCb.sessionInfo[sessionId].ac_info[ac].addTsRsp[tspecIndex];
 
@@ -3097,9 +3112,9 @@ eHalStatus sme_QosCCXSaveTspecResponse(tpAniSirGlobal pMac, v_U8_t sessionId, tD
 }
 
 /*--------------------------------------------------------------------------
-  \brief sme_QosCCXProcessReassocTspecRsp() - This function processes the
+  \brief sme_QosESEProcessReassocTspecRsp() - This function processes the
          WMM TSPEC IE in the reassoc response. Reassoc triggered as part of 
-         CCX roaming to another CCX capable AP. If the TSPEC was added before 
+         ESE roaming to another ESE capable AP. If the TSPEC was added before
          reassoc, as part of Call Admission Control, the reasso req from the
          STA would carry the TSPEC parameters which were already negotiated
          with the older AP.
@@ -3110,7 +3125,7 @@ eHalStatus sme_QosCCXSaveTspecResponse(tpAniSirGlobal pMac, v_U8_t sessionId, tD
   
   \return eHAL_STATUS_SUCCESS - Release is successful.
   --------------------------------------------------------------------------*/
-eHalStatus sme_QosCCXProcessReassocTspecRsp(tpAniSirGlobal pMac, v_U8_t sessionId, void* pEvent_info)
+eHalStatus sme_QosESEProcessReassocTspecRsp(tpAniSirGlobal pMac, v_U8_t sessionId, void* pEvent_info)
 {
     sme_QosSessionInfo *pSession;
     sme_QosACInfo *pACInfo;
@@ -3134,7 +3149,7 @@ eHalStatus sme_QosCCXProcessReassocTspecRsp(tpAniSirGlobal pMac, v_U8_t sessionI
     tspecIeLen = pCsrConnectedInfo->nTspecIeLength;
     if (tspecIeLen < sizeof(tDot11fIEWMMTSPEC)) {
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-                FL("CCX Tspec IE len %d less than min %d"),
+                FL("ESE Tspec IE len %d less than min %d"),
                 tspecIeLen, sizeof(tDot11fIEWMMTSPEC));
         return eHAL_STATUS_FAILURE;
     }
@@ -3156,7 +3171,7 @@ eHalStatus sme_QosCCXProcessReassocTspecRsp(tpAniSirGlobal pMac, v_U8_t sessionI
                 if (tspec_mask_status & (1 << tspec_flow_index)) {
                 VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_WARN, 
                 FL("Found Tspec entry flow = %d AC = %d"),tspec_flow_index, ac);
-                    sme_QosCCXSaveTspecResponse(pMac, sessionId, pTspecIE, ac, tspec_flow_index);
+                    sme_QosESESaveTspecResponse(pMac, sessionId, pTspecIE, ac, tspec_flow_index);
                 } else {
                 VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_WARN, 
                 FL("Not found Tspec entry flow = %d AC = %d"),tspec_flow_index, ac);
@@ -3227,7 +3242,7 @@ static void sme_QosCopyTspecInfo(tpAniSirGlobal pMac, sme_QosWmmTspecInfo *pTspe
 }
 
 /*--------------------------------------------------------------------------
-  \brief sme_QosCCxRetrieveTspecInfo() - This function is called by CSR
+  \brief sme_QosEseRetrieveTspecInfo() - This function is called by CSR
          when try to create reassoc request message to PE - csrSendSmeReassocReqMsg
          This functions get the existing tspec parameters to be included
          in the reassoc request.
@@ -3238,7 +3253,7 @@ static void sme_QosCopyTspecInfo(tpAniSirGlobal pMac, sme_QosWmmTspecInfo *pTspe
   
   \return v_U8_t - number of existing negotiated TSPECs
   --------------------------------------------------------------------------*/
-v_U8_t sme_QosCCxRetrieveTspecInfo(tpAniSirGlobal pMac, v_U8_t sessionId, tTspecInfo *pTspecInfo)
+v_U8_t sme_QosESERetrieveTspecInfo(tpAniSirGlobal pMac, v_U8_t sessionId, tTspecInfo *pTspecInfo)
 {
     sme_QosSessionInfo *pSession;
     sme_QosACInfo *pACInfo;
@@ -3808,7 +3823,7 @@ eHalStatus sme_QosAddTsReq(tpAniSirGlobal pMac,
    tSirAddtsReq *pMsg = NULL;
    sme_QosSessionInfo *pSession;
    eHalStatus status = eHAL_STATUS_FAILURE;
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
    tCsrRoamSession *pCsrSession = CSR_GET_SESSION( pMac, sessionId );
 #endif
 #ifdef FEATURE_WLAN_DIAG_SUPPORT
@@ -3826,6 +3841,7 @@ eHalStatus sme_QosAddTsReq(tpAniSirGlobal pMac,
                 __func__, __LINE__, sessionId);
       return eHAL_STATUS_FAILURE;
    }
+
    pSession = &sme_QosCb.sessionInfo[sessionId];
    pMsg = (tSirAddtsReq *)vos_mem_malloc(sizeof(tSirAddtsReq));
    if (!pMsg)
@@ -3898,8 +3914,8 @@ eHalStatus sme_QosAddTsReq(tpAniSirGlobal pMac,
              __func__, __LINE__, 
              pTspec_Info->ts_info.up,
              pTspec_Info->ts_info.tid);
-#ifdef FEATURE_WLAN_CCX
-   if(pCsrSession->connectedProfile.isCCXAssoc)
+#ifdef FEATURE_WLAN_ESE
+   if(pCsrSession->connectedProfile.isESEAssoc)
    {
       pMsg->req.tsrsIE.tsid = pTspec_Info->ts_info.up;
       pMsg->req.tsrsPresent = 1;
@@ -4499,13 +4515,13 @@ eHalStatus sme_QosProcessReassocSuccessEv(tpAniSirGlobal pMac, v_U8_t sessionId,
                status = sme_QosProcessFTReassocRspEv(pMac, sessionId, pEvent_info);
            }
        }
-#ifdef FEATURE_WLAN_CCX
-       // If CCX association check for TSPEC IEs in the reassoc rsp frame
-       if (csrRoamIsCCXAssoc(pMac))
+#ifdef FEATURE_WLAN_ESE
+       // If ESE association check for TSPEC IEs in the reassoc rsp frame
+       if (csrRoamIsESEAssoc(pMac))
        {
            if (pCsrRoamSession && pCsrRoamSession->connectedInfo.nTspecIeLength)
            {
-               status = sme_QosCCXProcessReassocTspecRsp(pMac, sessionId, pEvent_info);
+               status = sme_QosESEProcessReassocTspecRsp(pMac, sessionId, pEvent_info);
            }
        }
 #endif
@@ -5511,7 +5527,7 @@ eHalStatus sme_QosProcessAddTsSuccessRsp(tpAniSirGlobal pMac,
    }
    WLAN_VOS_DIAG_LOG_REPORT(log_ptr);
 #endif //FEATURE_WLAN_DIAG_SUPPORT
-#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
+#if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
    if (ac == SME_QOS_EDCA_AC_VO)
    {
       // Indicate to neighbor roam logic of the new required VO
@@ -5670,7 +5686,7 @@ eHalStatus sme_QosAggregateParams(
      spec it is less than or equal to inactivity interval
      This is not provided by app since we currently don't support the HCCA
      mode of operation
-     Currently set it to 0 to avoid confusion: Cisco CCX needs ~0; spec 
+     Currently set it to 0 to avoid confusion: Cisco ESE needs ~0; spec
      requires inactivity interval to be > suspension interval: this could
      be tricky!
    -------------------------------------------------------------------------*/
@@ -7144,9 +7160,47 @@ eHalStatus sme_QosAddTsSuccessFnp(tpAniSirGlobal pMac, tListElem *pEntry)
       }
       else
       {
+         //For downgrading purpose Hdd set WmmTspecValid to false during roaming
+         //So need to set that flag we need to call the hdd in successful case.
+         if((hdd_status == SME_QOS_STATUS_SETUP_SUCCESS_IND)
+#if defined (WLAN_FEATURE_VOWIFI_11R)
+            &&
+            (!csrRoamIs11rAssoc(pMac))
+#endif
+#if defined(FEATURE_WLAN_ESE)
+            &&
+            (!csrRoamIsCCXAssoc(pMac))
+#endif
+           )
+         {
+             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                       "%s calling hdd_wmm_smecallback during  roaming for ac = %d", __func__, ac);
+             flow_info->QoSCallback(pMac, flow_info->HDDcontext,
+                                    &pACInfo->curr_QoSInfo[pACInfo->tspec_pending - 1],
+                                    hdd_status,
+                                    flow_info->QosFlowID
+                                    );
+         }
          flow_info->hoRenewal = VOS_FALSE;
       }
    }
+
+#ifdef DEBUG_ROAM_DELAY
+
+   if (pACInfo->curr_QoSInfo[pACInfo->tspec_pending - 1].ts_info.up ==  SME_QOS_WMM_UP_VO ||
+       pACInfo->curr_QoSInfo[pACInfo->tspec_pending - 1].ts_info.up ==  SME_QOS_WMM_UP_NC)
+   {
+      vos_record_roam_event(e_SME_VO_ADDTS_RSP, NULL, 0);
+   }
+
+   if (pACInfo->curr_QoSInfo[pACInfo->tspec_pending - 1].ts_info.up ==  SME_QOS_WMM_UP_VI||
+       pACInfo->curr_QoSInfo[pACInfo->tspec_pending - 1].ts_info.up ==  SME_QOS_WMM_UP_CL)
+
+   {
+      vos_record_roam_event(e_SME_VI_ADDTS_RSP, NULL, 0);
+   }
+#endif
+
    if(delete_entry)
    {
       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO_HIGH, 

@@ -29,7 +29,7 @@
 #include <sound/jack.h>
 #include <sound/q6afe-v2.h>
 #include <soc/qcom/socinfo.h>
-#include <qdsp6v2/msm-pcm-routing-v2.h>
+#include "qdsp6v2/msm-pcm-routing-v2.h"
 #include "../codecs/msm8x16-wcd.h"
 #include "../codecs/wcd9306.h"
 #define DRV_NAME "msm8x16-asoc-wcd"
@@ -50,7 +50,10 @@
 #define WCD9XXX_MBHC_DEF_RLOADS 5
 #define DEFAULT_MCLK_RATE 9600000
 
+#define WCD_MBHC_DEF_BUTTONS 5
 extern bool is_pmic_rev_2;
+#define WCD_MBHC_DEF_RLOADS 5
+
 static int msm_btsco_rate = BTSCO_RATE_8KHZ;
 static int msm_btsco_ch = 1;
 
@@ -61,8 +64,12 @@ static int msm_proxy_rx_ch = 2;
 
 static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 					bool dapm);
-static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
-					bool dapm);
+static int msm8x16_enable_extcodec_ext_clk(struct snd_soc_codec *codec,
+					int enable,	bool dapm);
+
+static void *def_msm8x16_wcd_mbhc_cal(void);
+
+static int conf_int_codec_mux(struct msm8916_asoc_mach_data *pdata);
 
 static struct wcd_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
@@ -94,7 +101,7 @@ static struct wcd9xxx_mbhc_config wcd9xxx_mbhc_cfg = {
 	.use_vddio_meas = true,
 	.enable_anc_mic_detect = false,
 	.hw_jack_type = FOUR_POLE_JACK,
- };
+};
 
 void *def_tapan_mbhc_cal(void)
 {
@@ -172,6 +179,7 @@ void *def_tapan_mbhc_cal(void)
 	gain[1] = 14;
 	return tapan_cal;
 }
+
 static struct afe_clk_cfg mi2s_rx_clk = {
 	AFE_API_VERSION_I2S_CONFIG,
 	Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
@@ -238,12 +246,13 @@ static int msm8x16_mclk_event(struct snd_soc_dapm_widget *w,
 
 static const struct snd_soc_dapm_widget msm8x16_dapm_widgets[] = {
 
-	SND_SOC_DAPM_SUPPLY("MCLK",  SND_SOC_NOPM, 0, 0,
+	SND_SOC_DAPM_SUPPLY_S("MCLK", -1, SND_SOC_NOPM, 0, 0,
 	msm8x16_mclk_event, SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_MIC("Handset Mic", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("Secondary Mic", NULL),
-
+	SND_SOC_DAPM_MIC("Digital Mic1", NULL),
+	SND_SOC_DAPM_MIC("Digital Mic2", NULL),
 };
 
 static char const *rx_bit_format_text[] = {"S16_LE", "S24_LE"};
@@ -259,7 +268,8 @@ static int msm_pri_rx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	struct snd_interval *channels = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_CHANNELS);
 
-	pr_debug("%s()\n", __func__);
+	pr_debug("%s: Number of channels = %d\n", __func__,
+			msm_pri_mi2s_rx_ch);
 	rate->min = rate->max = 48000;
 	channels->min = channels->max = msm_pri_mi2s_rx_ch;
 
@@ -333,31 +343,65 @@ static int loopback_mclk_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
 
 	pdata = snd_soc_card_get_drvdata(codec->card);
-
+	conf_int_codec_mux(pdata);
+	pr_debug("%s: mclk_rsc_ref %d enable %ld\n",
+			__func__, atomic_read(&pdata->mclk_rsc_ref),
+			ucontrol->value.integer.value[0]);
 	switch (ucontrol->value.integer.value[0]) {
 	case 1:
-		pdata->digital_cdc_clk.clk_val = 9600000;
-		ret = afe_set_digital_codec_core_clock(
-				AFE_PORT_ID_PRIMARY_MI2S_RX,
-				&pdata->digital_cdc_clk);
+		ret = pinctrl_select_state(pinctrl_info.pinctrl,
+				pinctrl_info.cdc_lines_act);
 		if (ret < 0) {
-			pr_err("%s: failed to enable the MCLK: %d\n",
+			pr_err("%s: failed to configure the gpio; ret=%d\n",
 					__func__, ret);
 			break;
 		}
+		mutex_lock(&pdata->cdc_mclk_mutex);
+		if ((!atomic_read(&pdata->mclk_rsc_ref)) &&
+				(!atomic_read(&pdata->mclk_enabled))) {
+			pdata->digital_cdc_clk.clk_val = 9600000;
+			ret = afe_set_digital_codec_core_clock(
+					AFE_PORT_ID_PRIMARY_MI2S_RX,
+					&pdata->digital_cdc_clk);
+			if (ret < 0) {
+				pr_err("%s: failed to enable the MCLK: %d\n",
+						__func__, ret);
+				mutex_unlock(&pdata->cdc_mclk_mutex);
+				pinctrl_select_state(pinctrl_info.pinctrl,
+						pinctrl_info.cdc_lines_sus);
+				break;
+			}
+			atomic_set(&pdata->mclk_enabled, true);
+		}
+		mutex_unlock(&pdata->cdc_mclk_mutex);
+		atomic_inc(&pdata->mclk_rsc_ref);
 		msm8x16_wcd_mclk_enable(codec, 1, true);
 		break;
 	case 0:
-		pdata->digital_cdc_clk.clk_val = 0;
-		ret = afe_set_digital_codec_core_clock(
-				AFE_PORT_ID_PRIMARY_MI2S_RX,
-				&pdata->digital_cdc_clk);
-		if (ret < 0) {
-			pr_err("%s: failed to disable the MCLK: %d\n",
-					__func__, ret);
+		if (atomic_read(&pdata->mclk_rsc_ref) <= 0)
 			break;
-		}
 		msm8x16_wcd_mclk_enable(codec, 0, true);
+		mutex_lock(&pdata->cdc_mclk_mutex);
+		if ((!atomic_dec_return(&pdata->mclk_rsc_ref)) &&
+				(atomic_read(&pdata->mclk_enabled))) {
+			pdata->digital_cdc_clk.clk_val = 0;
+			ret = afe_set_digital_codec_core_clock(
+					AFE_PORT_ID_PRIMARY_MI2S_RX,
+					&pdata->digital_cdc_clk);
+			if (ret < 0) {
+				pr_err("%s: failed to disable the MCLK: %d\n",
+						__func__, ret);
+				mutex_unlock(&pdata->cdc_mclk_mutex);
+				break;
+			}
+			atomic_set(&pdata->mclk_enabled, false);
+		}
+		mutex_unlock(&pdata->cdc_mclk_mutex);
+		ret = pinctrl_select_state(pinctrl_info.pinctrl,
+				pinctrl_info.cdc_lines_sus);
+		if (ret < 0)
+			pr_err("%s: failed to configure the gpio; ret=%d\n",
+					__func__, ret);
 		break;
 	default:
 		pr_err("%s: Unexpected input value\n", __func__);
@@ -548,36 +592,42 @@ static int mi2s_clk_ctl(struct snd_pcm_substream *substream, bool enable)
 static int ext_mi2s_clk_ctl(struct snd_pcm_substream *substream, bool enable)
 {
 	int ret = 0;
+
 	if (enable) {
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			mi2s_rx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ;
-			ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_RX,
-						  &mi2s_rx_clk);
+			ret = afe_set_lpass_clock(
+				AFE_PORT_ID_QUATERNARY_MI2S_RX,
+				&mi2s_rx_clk);
 		} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 			mi2s_tx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ;
-			ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_TX,
-						  &mi2s_tx_clk);
+			ret = afe_set_lpass_clock(
+				AFE_PORT_ID_QUATERNARY_MI2S_TX,
+				&mi2s_tx_clk);
 		} else
 			pr_err("%s:Not valid substream.\n", __func__);
 
 		if (ret < 0)
-			pr_err("%s:afe_set_lpass_clock failed\n", __func__);
-
+			pr_err("%s:afe_set_lpass_clock failed ret=%d\n",
+					__func__, ret);
 	} else {
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			mi2s_rx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
-			ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_RX,
-						  &mi2s_rx_clk);
+			ret = afe_set_lpass_clock(
+				AFE_PORT_ID_QUATERNARY_MI2S_RX,
+				&mi2s_rx_clk);
 		} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 			mi2s_tx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
-			ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_TX,
-						  &mi2s_tx_clk);
+			ret = afe_set_lpass_clock(
+				AFE_PORT_ID_QUATERNARY_MI2S_TX,
+				&mi2s_tx_clk);
 		} else
-			pr_err("%s:Not valid substream.\n", __func__);
+			pr_err("%s:Not valid substream %d\n", __func__,
+					substream->stream);
 
 		if (ret < 0)
-			pr_err("%s:afe_set_lpass_clock failed\n", __func__);
-
+				pr_err("%s:afe_set_lpass_clock failed ret=%d\n",
+					__func__, ret);
 	}
 	return ret;
 }
@@ -593,28 +643,38 @@ static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec,
 		   __func__, codec->name, enable,
 		   atomic_read(&pdata->mclk_rsc_ref));
 	if (enable) {
-		if (atomic_inc_return(&pdata->mclk_rsc_ref) == 1) {
+		if (!atomic_read(&pdata->mclk_rsc_ref)) {
 			cancel_delayed_work_sync(
 					&pdata->disable_mclk_work);
 			mutex_lock(&pdata->cdc_mclk_mutex);
 			if (atomic_read(&pdata->mclk_enabled) == false) {
 				pdata->digital_cdc_clk.clk_val =
 							pdata->mclk_freq;
-				afe_set_digital_codec_core_clock(
+				ret = afe_set_digital_codec_core_clock(
 						AFE_PORT_ID_PRIMARY_MI2S_RX,
 						&pdata->digital_cdc_clk);
+				if (ret < 0) {
+					pr_err("%s: failed to enable MCLK\n",
+							__func__);
+					mutex_unlock(&pdata->cdc_mclk_mutex);
+					return ret;
+				}
 				atomic_set(&pdata->mclk_enabled, true);
 			}
 			mutex_unlock(&pdata->cdc_mclk_mutex);
 		}
+		atomic_inc(&pdata->mclk_rsc_ref);
 	} else {
 		cancel_delayed_work_sync(&pdata->disable_mclk_work);
 		mutex_lock(&pdata->cdc_mclk_mutex);
 		if (atomic_read(&pdata->mclk_enabled) == true) {
 			pdata->digital_cdc_clk.clk_val = 0;
-			afe_set_digital_codec_core_clock(
+			ret = afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_PRIMARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
+			if (ret < 0)
+				pr_err("%s: failed to disable MCLK\n",
+						__func__);
 			atomic_set(&pdata->mclk_enabled, false);
 		}
 		mutex_unlock(&pdata->cdc_mclk_mutex);
@@ -622,8 +682,8 @@ static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec,
 	return ret;
 }
 
-static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
-					bool dapm)
+static int msm8x16_enable_extcodec_ext_clk(struct snd_soc_codec *codec,
+					int enable,	bool dapm)
 {
 	int ret = 0;
 	struct msm8916_asoc_mach_data *pdata = NULL;
@@ -633,33 +693,35 @@ static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 	pr_debug("%s: enable = %d  codec name %s enable %d mclk ref counter %d\n",
 		   __func__, enable, codec->name, enable,
 		   atomic_read(&pdata->mclk_rsc_ref));
-	mutex_lock(&pdata->cdc_mclk_mutex);
 	if (enable) {
 		if (atomic_inc_return(&pdata->mclk_rsc_ref) == 1) {
-			pdata->digital_cdc_clk.clk_val = pdata->mclk_freq;
+			mutex_lock(&pdata->cdc_mclk_mutex);
+			pdata->digital_cdc_clk.clk_val = 12288000;
 			afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_PRIMARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
-			pdata->digital_cdc_clk.clk_val = pdata->mclk_freq;
+			pdata->digital_cdc_clk.clk_val = 12288000;
 			afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_QUATERNARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
+			mutex_unlock(&pdata->cdc_mclk_mutex);
 			tapan_mclk_enable(codec, 1, dapm);
 		}
 	} else {
 		if (atomic_dec_return(&pdata->mclk_rsc_ref) == 0) {
+			mutex_lock(&pdata->cdc_mclk_mutex);
 			pdata->digital_cdc_clk.clk_val = 0;
 			afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_PRIMARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
 			pdata->digital_cdc_clk.clk_val = 0;
-			tapan_mclk_enable(codec, 0, dapm);
 			afe_set_digital_codec_core_clock(
 					AFE_PORT_ID_QUATERNARY_MI2S_RX,
 					&pdata->digital_cdc_clk);
+			mutex_unlock(&pdata->cdc_mclk_mutex);
+			tapan_mclk_enable(codec, 0, dapm);
 		}
 	}
-	mutex_unlock(&pdata->cdc_mclk_mutex);
 	return ret;
 }
 
@@ -742,6 +804,7 @@ static int msm8x16_mclk_event(struct snd_soc_dapm_widget *w,
 		}
 		break;
 	default:
+		pr_err("%s: invalid DAPM event %d\n", __func__, event);
 		return -EINVAL;
 	}
 	return 0;
@@ -761,7 +824,8 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	if (!pdata->codec_type) {
 		ret = mi2s_clk_ctl(substream, false);
 		if (ret < 0)
-			pr_err("%s:clock disable failed\n", __func__);
+			pr_err("%s:clock disable failed; ret=%d\n", __func__,
+					ret);
 		if (atomic_read(&pdata->mclk_rsc_ref) > 0) {
 			atomic_dec(&pdata->mclk_rsc_ref);
 			pr_debug("%s: decrementing mclk_res_ref %d\n",
@@ -769,17 +833,18 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 					atomic_read(&pdata->mclk_rsc_ref));
 		}
 	} else {
-
 		ret = pinctrl_select_state(ext_cdc_pinctrl_info.pinctrl,
 					ext_cdc_pinctrl_info.tlmm_act);
 		if (ret < 0) {
-			pr_err("failed to configure the gpio\n");
-			return ;
+			pr_err("%s: failed to configure the gpio; ret=%d\n",
+					__func__, ret);
+			return;
 		}
-		ret =  msm_snd_enable_codec_ext_clk(codec, 1, false);
+		ret =  msm8x16_enable_extcodec_ext_clk(codec, 0, false);
 		if (ret < 0) {
-			pr_err("failed to enable mclk\n");
-			return ;
+			pr_err("%s: failed to enable mclk; ret=%d\n",
+					__func__, ret);
+			return;
 		}
 		ret = ext_mi2s_clk_ctl(substream, false);
 	}
@@ -794,28 +859,16 @@ static int conf_int_codec_mux_sec(struct msm8916_asoc_mach_data *pdata)
 	/*
 	 * Configure the secondary MI2S to TLMM.
 	 */
-	vaddr = ioremap(LPASS_CSR_GP_IO_MUX_SPKR_CTL , 4);
-	if (!vaddr) {
-		pr_err("%s ioremap failure for addr %x",
-					__func__, LPASS_CSR_GP_IO_MUX_SPKR_CTL);
-		return -ENOMEM;
-	}
+	vaddr = pdata->vaddr_gpio_mux_spkr_ctl;
 	val = ioread32(vaddr);
 	/* enable sec MI2S interface to TLMM GPIO */
 	val = val | 0x0004007E;
 	pr_debug("%s: Sec mux configuration = %x\n", __func__, val);
 	iowrite32(val, vaddr);
-	iounmap(vaddr);
-	vaddr = ioremap(LPASS_CSR_GP_IO_MUX_MIC_CTL , 4);
-	if (!vaddr) {
-		pr_err("%s ioremap failure for addr %x",
-					__func__, LPASS_CSR_GP_IO_MUX_MIC_CTL);
-		return -ENOMEM;
-	}
+	vaddr = pdata->vaddr_gpio_mux_mic_ctl;
 	val = ioread32(vaddr);
 	val = val | 0x00200000;
 	iowrite32(val, vaddr);
-	iounmap(vaddr);
 	return ret;
 }
 
@@ -909,30 +962,20 @@ static int conf_int_codec_mux(struct msm8916_asoc_mach_data *pdata)
 	int val = 0;
 	void __iomem *vaddr = NULL;
 
-	/* configure the Primary, Sec and Tert mux for Mi2S interface
+	/*
+	 *configure the Primary, Sec and Tert mux for Mi2S interface
 	 * slave select to invalid state, for machine mode this
 	 * should move to HW, I do not like to do it here
 	 */
-	vaddr = ioremap(LPASS_CSR_GP_IO_MUX_SPKR_CTL , 4);
-	if (!vaddr) {
-		pr_err("%s ioremap failure for addr %x",
-				__func__, LPASS_CSR_GP_IO_MUX_SPKR_CTL);
-		return -ENOMEM;
-	}
+	vaddr = pdata->vaddr_gpio_mux_spkr_ctl;
 	val = ioread32(vaddr);
 	val = val | 0x00030300;
 	iowrite32(val, vaddr);
-	iounmap(vaddr);
-	vaddr = ioremap(LPASS_CSR_GP_IO_MUX_MIC_CTL , 4);
-	if (!vaddr) {
-		pr_err("%s ioremap failure for addr %x",
-				__func__, LPASS_CSR_GP_IO_MUX_MIC_CTL);
-		return -ENOMEM;
-	}
+
+	vaddr = pdata->vaddr_gpio_mux_mic_ctl;
 	val = ioread32(vaddr);
 	val = val | 0x00220002;
 	iowrite32(val, vaddr);
-	iounmap(vaddr);
 	return ret;
 }
 
@@ -957,6 +1000,12 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 					__func__);
 			return ret;
 		}
+		ret = mi2s_clk_ctl(substream, true);
+		if (ret < 0) {
+			pr_err("%s: failed to enable sclk %d\n",
+					__func__, ret);
+			return ret;
+		}
 		ret =  msm8x16_enable_codec_ext_clk(codec, 1, true);
 		if (ret < 0) {
 			pr_err("failed to enable mclk\n");
@@ -964,13 +1013,6 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		}
 		/* Enable the codec mclk config */
 		msm8x16_wcd_mclk_enable(codec, 1, true);
-		ret = mi2s_clk_ctl(substream, true);
-		if (ret < 0) {
-			pr_err("%s failed to enable the sclk %x\n",
-					__func__,
-					LPASS_CSR_GP_IO_MUX_SPKR_CTL);
-			return -ENOMEM;
-		}
 		ret = pinctrl_select_state(pinctrl_info.pinctrl,
 					pinctrl_info.cdc_lines_act);
 		if (ret < 0) {
@@ -983,60 +1025,34 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		 * and Data 1 to TLMM GPIO,
 		 * TODO MUX config
 		 */
-
-		vaddr = ioremap(LPASS_CSR_GP_IO_MUX_SPKR_CTL , 4);
-		if (!vaddr) {
-			pr_err("%s ioremap failure for addr %x\n",
-					__func__,
-					LPASS_CSR_GP_IO_MUX_SPKR_CTL);
-			return -ENOMEM;
-		}
+		vaddr = pdata->vaddr_gpio_mux_spkr_ctl;
 		val = ioread32(vaddr);
-		iounmap(vaddr);
 		val = val | 0x00000002;
-		vaddr = ioremap(LPASS_CSR_GP_IO_MUX_SPKR_CTL , 4);
-		if (!vaddr) {
-			pr_err("%s ioremap failure for addr %x",
-					__func__, LPASS_CSR_GP_IO_MUX_SPKR_CTL);
-			return -ENOMEM;
-		}
 		iowrite32(val, vaddr);
-		iounmap(vaddr);
 
-		vaddr = ioremap(LPASS_CSR_GP_IO_MUX_MIC_CTL , 4);
-		if (!vaddr) {
-			pr_err("%s ioremap failure for addr %x",
-					__func__, LPASS_CSR_GP_IO_MUX_MIC_CTL);
-			return -ENOMEM;
-		}
+		vaddr = pdata->vaddr_gpio_mux_mic_ctl;
 		val = ioread32(vaddr);
-		iounmap(vaddr);
 		val = val | 0x00000002;
-		vaddr = ioremap(LPASS_CSR_GP_IO_MUX_MIC_CTL , 4);
-		if (!vaddr) {
-			pr_err("%s ioremap failure for addr %x",
-					__func__, LPASS_CSR_GP_IO_MUX_MIC_CTL);
-			return -ENOMEM;
-		}
 		iowrite32(val, vaddr);
-		iounmap(vaddr);
 
 		ret = pinctrl_select_state(ext_cdc_pinctrl_info.pinctrl,
 						ext_cdc_pinctrl_info.tlmm_act);
 		if (ret < 0) {
-			pr_err("failed to configure the gpio\n");
+			pr_err("%s: failed to configure the gpio; ret=%d\n",
+					__func__, ret);
 			return ret;
 		}
-		ret =  msm_snd_enable_codec_ext_clk(codec, 1, true);
+		ret =  msm8x16_enable_extcodec_ext_clk(codec, 1, true);
 		if (ret < 0) {
-			pr_err("failed to enable mclk\n");
+			pr_err("%s: failed to enable mclk; ret=%d\n",
+					__func__, ret);
 			return ret;
 		}
 		ret = ext_mi2s_clk_ctl(substream, true);
 	}
 	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_CBS_CFS);
 	if (ret < 0)
-		pr_err("set fmt cpu dai failed\n");
+		pr_err("%s: set fmt cpu dai failed; ret=%d\n", __func__, ret);
 
 	return ret;
 }
@@ -1047,34 +1063,48 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	struct wcd_mbhc_btn_detect_cfg *btn_cfg;
 	u16 *btn_low, *btn_high;
 
-	msm8x16_wcd_cal = kzalloc(sizeof(struct wcd_mbhc_btn_detect_cfg),
-					GFP_KERNEL);
+	msm8x16_wcd_cal = kzalloc(WCD_MBHC_CAL_SIZE(WCD_MBHC_DEF_BUTTONS,
+				WCD_MBHC_DEF_RLOADS), GFP_KERNEL);
 	if (!msm8x16_wcd_cal) {
 		pr_err("%s: out of memory\n", __func__);
 		return NULL;
 	}
 
-	btn_cfg = WCD_MBHC_CAL_BTN_DET_PTR(msm8x16_wcd_cal);
-	btn_cfg->num_btn = WCD_MBHC_DEF_BUTTONS;
-	btn_low = btn_cfg->_v_btn_low;
-	btn_high = btn_cfg->_v_btn_high;
+#define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8x16_wcd_cal)->X) = (Y))
+	S(v_hs_max, 1500);
+#undef S
+#define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8x16_wcd_cal)->X) = (Y))
+	S(num_btn, WCD_MBHC_DEF_BUTTONS);
+#undef S
 
+
+	btn_cfg = WCD_MBHC_CAL_BTN_DET_PTR(msm8x16_wcd_cal);
+	btn_low = btn_cfg->_v_btn_low;
+	btn_high = ((void *)&btn_cfg->_v_btn_low) +
+		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
+
+	/*
+	 * In SW we are maintaining two sets of threshold register
+	 * one for current source and another for Micbias.
+	 * all btn_low corresponds to threshold for current source
+	 * all bt_high corresponds to threshold for Micbias
+	 */
 #if 1
 	/*       
                                                               
                                        
   */
 	if (is_pmic_rev_2) {
-		btn_low[0] = 0;		/* Hook-Key */
+		btn_low[0] = 72;		/* Hook-Key */
 		btn_high[0] = 84;
-		btn_low[1] = 85;	/* Volume Up */
-		btn_high[1] = 200;
-		btn_low[2] = 201;	/* Volume Dn */
-		btn_high[2] = 384;
-		btn_low[3] = 384;
-		btn_high[3] = 384;
-		btn_low[4] = 384;
-		btn_high[4] = 384;
+		btn_low[1] = 136;	/* Volume Up */
+		btn_high[1] = 148;
+		btn_low[2] = 212;	/* Volume Dn */
+		btn_high[2] = 248;
+		btn_low[3] = 412;
+		btn_high[3] = 448;
+		btn_low[4] = 412;
+		btn_high[4] = 448;
 		pr_info("[LGE MBHC] PMIC rev 2.0 cal. is applied.\n");
 	} else {
 		btn_low[0] = 0;		/* Hook-Key */
@@ -1147,8 +1177,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 			return ret;
 		}
 	}
-
-	return ret;
+	return msm8x16_wcd_hs_detect(codec, &mbhc_cfg);
 }
 
 static int msm_audrx_init_wcd(struct snd_soc_pcm_runtime *rtd)
@@ -1159,7 +1188,7 @@ static int msm_audrx_init_wcd(struct snd_soc_pcm_runtime *rtd)
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
 
-	pr_debug("%s(),dev_name%s\n", __func__, dev_name(cpu_dai->dev));
+	pr_debug("%s: dev_name%s\n", __func__, dev_name(cpu_dai->dev));
 
 	snd_soc_add_codec_controls(codec, msm_snd_controls,
 				ARRAY_SIZE(msm_snd_controls));
@@ -1167,30 +1196,14 @@ static int msm_audrx_init_wcd(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_new_controls(dapm, msm8x16_dapm_widgets,
 				ARRAY_SIZE(msm8x16_dapm_widgets));
 
-	snd_soc_dapm_ignore_suspend(dapm, "Handset Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "Headset Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "Secondary Mic");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic1");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic2");
-
-	snd_soc_dapm_ignore_suspend(dapm, "EAR");
-	snd_soc_dapm_ignore_suspend(dapm, "HEADPHONE");
-	snd_soc_dapm_ignore_suspend(dapm, "SPK_OUT");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC1");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC2");
-	snd_soc_dapm_ignore_suspend(dapm, "AMIC3");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC1");
-	snd_soc_dapm_ignore_suspend(dapm, "DMIC2");
-
 	snd_soc_dapm_sync(dapm);
 
 	/* start mbhc */
 	wcd9xxx_mbhc_cfg.calibration = def_tapan_mbhc_cal();
-	if (wcd9xxx_mbhc_cfg.calibration) {
+	if (wcd9xxx_mbhc_cfg.calibration)
 		ret = tapan_hs_detect(codec, &wcd9xxx_mbhc_cfg);
-	} else {
+	else
 		ret = -ENOMEM;
-	}
 	return ret;
 }
 
@@ -1627,7 +1640,7 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.codec_name = "snd-soc-dummy",
 		.be_id = MSM_FRONTEND_DAI_LSM5,
 	},
-	{/* hw:x,24 */
+	{ /* hw:x,24 */
 		.name = "MSM8916 ULL",
 		.stream_name = "MultiMedia7",
 		.cpu_dai_name   = "MultiMedia7",
@@ -1642,13 +1655,28 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.ignore_pmdown_time = 1,
 		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA7,
 	},
+	{ /* hw:x,25 */
+		.name = "QUAT_MI2S Hostless",
+		.stream_name = "QUAT_MI2S Hostless",
+		.cpu_dai_name = "QUAT_MI2S_RX_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
 	/* Backend I2S DAI Links */
 	{
 		.name = LPASS_BE_PRI_MI2S_RX,
 		.stream_name = "Primary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.0",
 		.platform_name = "msm-pcm-routing",
-		.codec_name     = MSM8X16_CODEC_NAME,
+		.codec_name     = "tombak_codec",
 		.codec_dai_name = "msm8x16_wcd_i2s_rx1",
 		.no_pcm = 1,
 		.be_id = MSM_BACKEND_DAI_PRI_MI2S_RX,
@@ -1675,7 +1703,7 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.stream_name = "Tertiary MI2S Capture",
 		.cpu_dai_name = "msm-dai-q6-mi2s.2",
 		.platform_name = "msm-pcm-routing",
-		.codec_name     = MSM8X16_CODEC_NAME,
+		.codec_name     = "tombak_codec",
 		.codec_dai_name = "msm8x16_wcd_i2s_tx1",
 		.no_pcm = 1,
 		.be_id = MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
@@ -1892,14 +1920,14 @@ static bool msm8x16_swap_gnd_mic(struct snd_soc_codec *codec)
 		pr_err("%s: Invalid gpio: %d", __func__, pdata->us_euro_gpio);
 		return false;
 	}
+	value = gpio_get_value_cansleep(pdata->us_euro_gpio);
 	ret = pinctrl_select_state(pinctrl_info.pinctrl,
 				pinctrl_info.cross_conn_det_act);
 	if (ret < 0) {
 		pr_err("failed to configure the gpio\n");
 		return ret;
 	}
-	value = gpio_get_value_cansleep(pdata->us_euro_gpio);
-	gpio_direction_output(pdata->us_euro_gpio, !value);
+	gpio_set_value_cansleep(pdata->us_euro_gpio, !value);
 	pr_debug("%s: swap select switch %d to %d\n", __func__, value, !value);
 	ret = pinctrl_select_state(pinctrl_info.pinctrl,
 				pinctrl_info.cross_conn_det_sus);
@@ -2008,18 +2036,18 @@ int populate_ext_snd_card_dt_data(struct platform_device *pdev)
 	}
 	ext_cdc_pinctrl_info.pinctrl = pinctrl;
 	/* get all the states handles from Device Tree*/
-	ext_cdc_pinctrl_info.tlmm_sus = pinctrl_lookup_state(pinctrl, 
+	ext_cdc_pinctrl_info.tlmm_sus = pinctrl_lookup_state(pinctrl,
 			"ext_cdc_tlmm_lines_sus");
 	if (IS_ERR(ext_cdc_pinctrl_info.tlmm_sus)) {
-		pr_err("%s: Unable to get pinctrl disable state handle\n",
-								__func__);
+		pr_err("%s: Unable to get pinctrl disable state handle %ld\n",
+			__func__, PTR_ERR(ext_cdc_pinctrl_info.tlmm_sus));
 		return -EINVAL;
 	}
 	ext_cdc_pinctrl_info.tlmm_act = pinctrl_lookup_state(pinctrl,
 			"ext_cdc_tlmm_lines_act");
 	if (IS_ERR(ext_cdc_pinctrl_info.tlmm_act)) {
-		pr_err("%s: Unable to get pinctrl disable state handle\n",
-								__func__);
+		pr_err("%s: Unable to get pinctrl active state handle %ld\n",
+			__func__, PTR_ERR(ext_cdc_pinctrl_info.tlmm_act));
 		return -EINVAL;
 	}
 
@@ -2027,14 +2055,15 @@ int populate_ext_snd_card_dt_data(struct platform_device *pdev)
 	ret = pinctrl_select_state(ext_cdc_pinctrl_info.pinctrl,
 					ext_cdc_pinctrl_info.tlmm_sus);
 	if (ret != 0) {
-		pr_err("%s: Failed to disable the TLMM pins\n", __func__);
-		return -EIO;
+		pr_err("%s: Failed to disable the TLMM pins ret=%d\n",
+				__func__, ret);
+		return ret;
 	}
 
 	return 0;
 }
 
-void populate_ext_snd_card_dailinks(struct platform_device *pdev)
+static void populate_ext_snd_card_dailinks(struct platform_device *pdev)
 {
 	if (of_property_read_bool(pdev->dev.of_node,
 					"qcom,tapan-codec-9302")) {
@@ -2054,6 +2083,91 @@ void populate_ext_snd_card_dailinks(struct platform_device *pdev)
 		memcpy(msm8x16_9306_dai_links + ARRAY_SIZE(msm8x16_dai),
 			msm8x16_9306_dai, sizeof(msm8x16_9306_dai));
 	}
+}
+
+static int msm8x16_populate_dai_link_component_of_node(
+					struct snd_soc_card *card)
+{
+	int i, index, ret = 0;
+	struct device *cdev = card->dev;
+	struct snd_soc_dai_link *dai_link = card->dai_link;
+	struct device_node *phandle;
+
+	if (!cdev) {
+		pr_err("%s: Sound card device memory NULL\n", __func__);
+		return -ENODEV;
+	}
+
+	for (i = 0; i < card->num_links; i++) {
+		if (dai_link[i].platform_of_node && dai_link[i].cpu_of_node)
+			continue;
+
+		/* populate platform_of_node for snd card dai links */
+		if (dai_link[i].platform_name &&
+		    !dai_link[i].platform_of_node) {
+			index = of_property_match_string(cdev->of_node,
+						"asoc-platform-names",
+						dai_link[i].platform_name);
+			if (index < 0) {
+				pr_debug("%s: No match found for platform name: %s\n",
+					__func__, dai_link[i].platform_name);
+				ret = index;
+				goto cpu_dai;
+			}
+			phandle = of_parse_phandle(cdev->of_node,
+						"asoc-platform",
+						index);
+			if (!phandle) {
+				pr_err("%s: retrieving phandle for platform %s, index %d failed\n",
+					__func__, dai_link[i].platform_name,
+					index);
+				ret = -ENODEV;
+				goto err;
+			}
+			dai_link[i].platform_of_node = phandle;
+			dai_link[i].platform_name = NULL;
+		}
+cpu_dai:
+		/* populate cpu_of_node for snd card dai links */
+		if (dai_link[i].cpu_dai_name && !dai_link[i].cpu_of_node) {
+			index = of_property_match_string(cdev->of_node,
+						 "asoc-cpu-names",
+						 dai_link[i].cpu_dai_name);
+			if (index < 0)
+				goto codec_dai;
+			phandle = of_parse_phandle(cdev->of_node, "asoc-cpu",
+					      index);
+			if (!phandle) {
+				pr_err("%s: retrieving phandle for cpu dai %s failed\n",
+					__func__, dai_link[i].cpu_dai_name);
+				ret = -ENODEV;
+				goto err;
+			}
+			dai_link[i].cpu_of_node = phandle;
+			dai_link[i].cpu_dai_name = NULL;
+		}
+codec_dai:
+		/* populate codec_of_node for snd card dai links */
+		if (dai_link[i].codec_name && !dai_link[i].codec_of_node) {
+			index = of_property_match_string(cdev->of_node,
+						 "asoc-codec-names",
+						 dai_link[i].codec_name);
+			if (index < 0)
+				continue;
+			phandle = of_parse_phandle(cdev->of_node, "asoc-codec",
+					      index);
+			if (!phandle) {
+				pr_err("%s: retrieving phandle for codec dai %s failed\n",
+					__func__, dai_link[i].codec_name);
+				ret = -ENODEV;
+				goto err;
+			}
+			dai_link[i].codec_of_node = phandle;
+			dai_link[i].codec_name = NULL;
+		}
+	}
+err:
+	return ret;
 }
 
 static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
@@ -2080,6 +2194,23 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+	pdata->vaddr_gpio_mux_spkr_ctl =
+		ioremap(LPASS_CSR_GP_IO_MUX_SPKR_CTL , 4);
+	if (!pdata->vaddr_gpio_mux_spkr_ctl) {
+		pr_err("%s ioremap failure for addr %x",
+				__func__, LPASS_CSR_GP_IO_MUX_SPKR_CTL);
+		ret = -ENOMEM;
+		goto err;
+	}
+	pdata->vaddr_gpio_mux_mic_ctl =
+		ioremap(LPASS_CSR_GP_IO_MUX_MIC_CTL , 4);
+	if (!pdata->vaddr_gpio_mux_mic_ctl) {
+		pr_err("%s ioremap failure for addr %x",
+				__func__, LPASS_CSR_GP_IO_MUX_MIC_CTL);
+		ret = -ENOMEM;
+		goto err;
+	}
+
 	ret = of_property_read_u32(pdev->dev.of_node, card_dev_id, &id);
 	if (ret) {
 		dev_err(&pdev->dev,
@@ -2088,12 +2219,6 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	}
 
 	pdev->id = id;
-	dev_set_name(&pdev->dev, "%s.%d", "msm-snd-card", id);
-
-	dev_dbg(&pdev->dev, "%s: dev name %s, id:%d\n", __func__,
-		 dev_name(&pdev->dev), pdev->id);
-
-	dev_dbg(&pdev->dev, "%s-card:%d\n", __func__, pdev->id);
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
 		ret = -EINVAL;
@@ -2115,7 +2240,8 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 	}
 	if (pdev->id >= MAX_SND_CARDS) {
-		dev_err(&pdev->dev, "Sound Card parsed is wrong\n");
+		dev_err(&pdev->dev, "Sound Card parsed is wrong, id=%d\n",
+				pdev->id);
 		ret = -EINVAL;
 		goto err;
 	}
@@ -2125,17 +2251,18 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 			/*Populate external codec TLMM configs*/
 		ret = populate_ext_snd_card_dt_data(pdev);
 		if (ret < 0) {
-			dev_err(&pdev->dev, "error finding the DT params\n");
-		goto err;
+			dev_err(&pdev->dev, "error finding the DT params ret=%d\n",
+					ret);
+			goto err;
 		}
 		populate_ext_snd_card_dailinks(pdev);
+		bear_cards[pdev->id].name = dev_name(&pdev->dev);
 		card = &bear_cards[pdev->id];
 	} else {
 		card = &bear_cards[pdev->id];
 		bear_cards[pdev->id].name = dev_name(&pdev->dev);
+		card = &bear_cards[pdev->id];
 		dev_info(&pdev->dev, "default codec configured\n");
-		dev_dbg(&pdev->dev, "%s: dev name %s, id:%d\n", __func__,
-			 card->name, pdev->id);
 		pdata->codec_type = 0;
 		num_strings = of_property_count_strings(pdev->dev.of_node,
 				ext_pa);
@@ -2221,6 +2348,12 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
+	ret = msm8x16_populate_dai_link_component_of_node(card);
+	if (ret) {
+		ret = -EPROBE_DEFER;
+		goto err;
+	}
+
 	ret = snd_soc_register_card(card);
 	if (ret) {
 		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n",
@@ -2230,6 +2363,10 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	return 0;
 err:
 	devm_kfree(&pdev->dev, pdata);
+	if (pdata->vaddr_gpio_mux_spkr_ctl)
+		iounmap(pdata->vaddr_gpio_mux_spkr_ctl);
+	if (pdata->vaddr_gpio_mux_mic_ctl)
+		iounmap(pdata->vaddr_gpio_mux_mic_ctl);
 	return ret;
 }
 
@@ -2238,6 +2375,10 @@ static int msm8x16_asoc_machine_remove(struct platform_device *pdev)
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 
+	if (pdata->vaddr_gpio_mux_spkr_ctl)
+		iounmap(pdata->vaddr_gpio_mux_spkr_ctl);
+	if (pdata->vaddr_gpio_mux_mic_ctl)
+		iounmap(pdata->vaddr_gpio_mux_mic_ctl);
 	snd_soc_unregister_card(card);
 	mutex_destroy(&pdata->cdc_mclk_mutex);
 	return 0;

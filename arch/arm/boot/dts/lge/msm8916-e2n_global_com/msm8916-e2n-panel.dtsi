@@ -29,13 +29,12 @@
 
 &mdss_dsi0 {
        qcom,dsi-pref-prim-pan = <&dsi_lgd_incell_vid>;
-       pinctrl-names = "mdss_default", "mdss_sleep";
+       pinctrl-names = "mdss_default";
        pinctrl-0 = <&mdss_dsi_active>;
-       pinctrl-1 = <&mdss_dsi_suspend>;
 
        qcom,platform-reset-gpio = <&msm_gpio 25 0>;
        qcom,platform-fd-gpio = <&msm_gpio 34 0>;
        qcom,platform-enable-gpio = <&msm_gpio 97 0>;
        qcom,platform-iovcc-gpio =<&msm_gpio 10 0>;
-	   qcom,regulator-ldo-mode;
+       qcom,regulator-ldo-mode;
 };

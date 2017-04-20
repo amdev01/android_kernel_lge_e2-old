@@ -157,11 +157,11 @@ static int gen_modem_panic(const char *val, struct kernel_param *kp)
 	}
 	pr_err("gen_modem_panic param to %d\n", gen_modem_panic_type);
 	switch (gen_modem_panic_type) {
-		default:
-			subsystem_restart("modem");
-			break;
 		case 2:
 			subsys_modem_restart();
+			break;
+		default:
+	subsystem_restart("modem");
 			break;
 	}
 	return 0;

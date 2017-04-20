@@ -6,14 +6,15 @@
 #include <asm/system_info.h>
 #include <linux/of.h>
 #include <linux/of_fdt.h>
-#include <linux/qpnp/qpnp-adc.h>
-#include <linux/power_supply.h>
 
 #ifdef CONFIG_USB_G_LGE_ANDROID
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/platform_data/lge_android_usb.h>
 #endif
+
+#include <linux/qpnp/qpnp-adc.h>
+#include <linux/power_supply.h>
 
 #define PROP_VAL_MAX_SIZE 50
 
@@ -23,18 +24,6 @@ struct chg_cable_info_table {
 	unsigned ta_ma;
 	unsigned usb_ma;
 };
-
-#ifdef CONFIG_LGE_QFPROM_INTERFACE
-static struct platform_device qfprom_device = {
-	.name = "lge-qfprom",
-	.id = -1,
-};
-
-void __init lge_add_qfprom_devices(void)
-{
-	platform_device_register(&qfprom_device);
-}
-#endif
 
 #define ADC_NO_INIT_CABLE   0
 #define C_NO_INIT_TA_MA     0
@@ -75,12 +64,13 @@ static struct cn_prop cn_array[] = {
 int __init lge_init_dt_scan_chosen(unsigned long node,
 		const char *uname, int depth, void *data)
 {
-	unsigned long len;
+	int len;
 	int i;
 	enum cn_prop_type type;
-	char *p;
-	uint32_t *u32;
-	void *temp;
+	char* p_data;
+	const __be32 *p;
+	const __be32 *u32;
+	const __be32 *temp;
 
 	if (depth != 1 || (strcmp(uname, "chosen") != 0
 					   && strcmp(uname, "chosen@0") != 0))
@@ -101,7 +91,7 @@ int __init lge_init_dt_scan_chosen(unsigned long node,
 		} else {
 			p = of_get_flat_dt_prop(node, cn_array[i].name, &len);
 			if (p != NULL)
-				strlcpy(cn_array[i].str, p, len);
+				strlcpy(cn_array[i].str, p_data, len);
 		}
 		cn_array[i].is_valid = 1;
 	}
@@ -305,7 +295,6 @@ char *rev_str[] = {"evb1", "evb2", "rev_a", "rev_b", "rev_c", "rev_d",
 
 #ifdef CONFIG_LGE_PM_PSEUDO_BATTERY
 extern void pseudo_batt_ibatmax_set(void);
-
 struct pseudo_batt_info_type pseudo_batt_info = {
 	.mode = 0,
 };
@@ -337,14 +326,21 @@ void pseudo_batt_set(struct pseudo_batt_info_type *info)
 #endif
 
 #ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
-
+struct power_supply *usb_psy;
 int lge_battery_info = BATT_ID_UNKNOWN;
 bool is_lge_battery_valid(void)
 {
+	union power_supply_propval usb_val = {0,};
 
-	if(lge_pm_get_cable_type()== CABLE_56K ||
+	if (!usb_psy)
+		usb_psy = power_supply_get_by_name("usb");
+	if (!usb_psy)
+		return false;
+	usb_psy->get_property(usb_psy, POWER_SUPPLY_PROP_PRESENT, &usb_val);
+	if((lge_pm_get_cable_type()== CABLE_56K ||
 		lge_pm_get_cable_type()== CABLE_130K ||
-		lge_pm_get_cable_type()== CABLE_910K)
+		lge_pm_get_cable_type()== CABLE_910K) &&
+		usb_val.intval)
 		return true;
 
 	if (lge_battery_info == BATT_ID_DS2704_N ||
@@ -589,5 +585,33 @@ void __init lge_add_android_usb_devices(void)
 {
 	platform_device_register(&lge_android_usb_device);
 }
+
+#ifdef CONFIG_LGE_QFPROM_INTERFACE
+static struct platform_device qfprom_device = {
+	.name = "lge-qfprom",
+	.id = -1,
+};
+
+void __init lge_add_qfprom_devices(void)
+{
+	platform_device_register(&qfprom_device);
+}
+#endif
+
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+static struct platform_device lg_diag_cmd_device = {
+	.name = "lg_diag_cmd",
+	.id = -1,
+	.dev    = {
+		.platform_data = 0, /* &lg_diag_cmd_pdata */
+	},
+};
+
+static int __init lge_diag_devices_init(void)
+{
+	return platform_device_register(&lg_diag_cmd_device);
+}
+arch_initcall(lge_diag_devices_init);
+#endif
 
 #endif

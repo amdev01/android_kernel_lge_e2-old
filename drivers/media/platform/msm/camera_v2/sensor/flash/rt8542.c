@@ -213,7 +213,9 @@ static void rt8542_set_main_current_level(struct i2c_client *client, int level)
 	mutex_lock(&dev->bl_mutex);
 
 #ifdef CONFIG_LGE_PM_FACTORY_CABLE
-	if ( ( LGE_BOOT_MODE_QEM_910K == lge_get_boot_mode() || LGE_BOOT_MODE_PIF_910K == lge_get_boot_mode() ) && ( BATT_ID_UNKNOWN == read_lge_battery_id()) ){
+	if ((LGE_BOOT_MODE_QEM_910K == lge_get_boot_mode()
+			|| LGE_BOOT_MODE_PIF_910K == lge_get_boot_mode())
+			&& ( BATT_ID_UNKNOWN == read_lge_battery_id()) ){
 			pr_err("Set LCD brightness minimum, No Battery or No proper Battery with 910K Cable\n");
 			rt8542_write_reg(client, 0x05, 0x05);
 	} else{
@@ -317,7 +319,7 @@ void rt8542_backlight_on(int level)
 		rt8542_read_reg(main_rt8542_dev->client, 0x0A, &bl_ctrl);
 		bl_ctrl |= 0x19;
 		rt8542_write_reg(main_rt8542_dev->client, 0x0A, bl_ctrl);
-		pr_info("%s: ON!\n", __func__);
+		pr_info("mdss %s: ON!\n", __func__);
 	}
 
 	mdelay(1);
@@ -343,7 +345,7 @@ void rt8542_backlight_off(void)
 	if (backlight_status == POWER_OFF) {
 		gpio_direction_output(gpio, 0);
 		usleep(6*1000);
-		pr_err("%s: OFF!\n", __func__);
+		pr_info("mdss %s: OFF!\n", __func__);
 	}
 
 	return;
@@ -407,7 +409,10 @@ void rt8542_lcd_backlight_set_level(int level)
 		if (level == 0) {
 			rt8542_backlight_off();
 		} else {
-			bright_per = (level / 2) - 1;
+			if (level < MIN_BRIGHTNESS_RT8542)			/* If backlight level that are required is less than MIN_BRIGHTNESS_RT8542, */
+				bright_per = MIN_BRIGHTNESS_RT8542;		/* set the backlight value to MIN_BRIGHTNESS_RT8542. */
+			else
+				bright_per = (level / 2) - 1;
 			rt8542_backlight_on(bright_per);
 		}
 	} else {

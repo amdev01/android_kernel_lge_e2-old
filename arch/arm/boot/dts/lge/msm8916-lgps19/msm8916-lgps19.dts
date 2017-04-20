@@ -13,8 +13,8 @@
 /dts-v1/;
 
 #include "../msm8916-lge-common/msm8916-lge.dtsi"
-#include "msm8916-lgps19.dtsi"
 #include "../../qcom/msm8916-memory.dtsi"
+#include "msm8916-lgps19.dtsi"
 
 / {
 	model = "Qualcomm MSM 8916, LGPS19";

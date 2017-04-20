@@ -34,10 +34,6 @@
   \brief virtual Operating System Servies (vOS)
 
    Basic type definitions
-
-   Copyright 2008 (c) Qualcomm Technologies, Inc.
-   All Rights Reserved.
-   Qualcomm Technologies Confidential and Proprietary.
   ========================================================================*/
 
 /* $Header$ */
@@ -213,10 +209,6 @@ typedef struct
 /// v_MACADDR_t macAddress = VOS_MAC_ADDR_ZERO_INITIALIZER;
 #define VOS_MAC_ADDR_ZERO_INITIALIZER { { 0, 0, 0, 0, 0, 0 } }
 
-//jayden 
-#define VOS_MAC_ADDR_LG_DEFAULT_INITIALIZER { { 0x00, 0x90, 0x4C, 0xC5, 0x12, 0x38 } }
-
-
 
 
 /*----------------------------------------------------------------------------
@@ -261,22 +253,10 @@ VOS_INLINE_FN v_BOOL_t vos_is_macaddr_equal( v_MACADDR_t *pMacAddr1,
 VOS_INLINE_FN v_BOOL_t vos_is_macaddr_zero( v_MACADDR_t *pMacAddr )
 {
    v_MACADDR_t zeroMacAddr = VOS_MAC_ADDR_ZERO_INITIALIZER;
-
+   
    return( vos_is_macaddr_equal( pMacAddr, &zeroMacAddr ) );
 }
 
-
-//jayden start
-VOS_INLINE_FN v_BOOL_t vos_is_macaddr_LGdefault( v_MACADDR_t *pMacAddr )
-{
-
-
-     v_MACADDR_t DefaultLGMacAddr = VOS_MAC_ADDR_LG_DEFAULT_INITIALIZER;  	
-
-  return( vos_is_macaddr_equal( pMacAddr, &DefaultLGMacAddr ) );
-}
-
-//jayden End
 
 /*----------------------------------------------------------------------------
   
@@ -426,19 +406,19 @@ VOS_INLINE_FN v_VOID_t vos_set_macaddr_broadcast( v_MACADDR_t *pMacAddr )
 
 /*----------------------------------------------------------------------------
   
-  \brief vos_atomic_set_U32() - set a U32 variable atomically 
-  
-  \param pTarget - pointer to the v_U32_t to set.
-  
-  \param value - the value to set in the v_U32_t variable.
-  
-  \return This function returns the value previously in the v_U32_t before
+  \brief vos_atomic_set() - set a variable atomically
+
+  \param pTarget - pointer to the variable to set.
+
+  \param value - the value to set in the  variable.
+
+  \return This function returns the value previously in the uintptr_t before
           the new value is set.
-    
+
   \sa vos_atomic_increment_U32(), vos_atomic_decrement_U32()
   
   --------------------------------------------------------------------------*/                                                 
-v_U32_t vos_atomic_set_U32( v_U32_t *pTarget, v_U32_t value );
+uintptr_t vos_atomic_set( uintptr_t *pTarget, uintptr_t value );
 
 
 // TODO: the below function is a stub to perform atomic set on a BYTE

@@ -409,6 +409,82 @@ static int __init lgeusb_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+static int user_diag_enable = 0;
+
+#define DIAG_ENABLE 1
+int get_diag_enable(void)
+{
+	if (lge_get_factory_boot())
+		user_diag_enable = DIAG_ENABLE;
+
+	return user_diag_enable;
+}
+EXPORT_SYMBOL(get_diag_enable);
+
+static ssize_t read_diag_enable(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	return sprintf(buf, "%d", user_diag_enable);
+}
+
+static ssize_t write_diag_enable(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t size)
+{
+	unsigned char string[2];
+
+	sscanf(buf, "%s", string);
+
+	if (!strncmp(string, "0", 1))
+		user_diag_enable = 0;
+	else
+		user_diag_enable = 1;
+
+	printk("[%s] diag_enable: %d\n",__func__, user_diag_enable);
+
+	return size;
+}
+static DEVICE_ATTR(diag_enable, S_IRUGO | S_IWUSR, read_diag_enable, write_diag_enable);
+
+int lg_diag_create_file(struct platform_device *pdev)
+{
+	int ret;
+
+	ret = device_create_file(&pdev->dev, &dev_attr_diag_enable);
+	if (ret) {
+		device_remove_file(&pdev->dev, &dev_attr_diag_enable);
+		return ret;
+	}
+	return ret;
+}
+
+int lg_diag_remove_file(struct platform_device *pdev)
+{
+	device_remove_file(&pdev->dev, &dev_attr_diag_enable);
+	return 0;
+}
+
+static int lg_diag_cmd_probe(struct platform_device *pdev)
+{
+	return lg_diag_create_file(pdev);
+}
+
+static int lg_diag_cmd_remove(struct platform_device *pdev)
+{
+	lg_diag_remove_file(pdev);
+	return 0;
+}
+
+static struct platform_driver lg_diag_cmd_driver = {
+	.probe          = lg_diag_cmd_probe,
+	.remove         = lg_diag_cmd_remove,
+	.driver 	= {
+		.name = "lg_diag_cmd",
+	},
+};
+#endif
+
 static int __init lgeusb_init(void)
 {
 	struct lgeusb_dev *dev;
@@ -428,6 +504,9 @@ static int __init lgeusb_init(void)
 	dev->vendor_id = LGE_VENDOR_ID;
 	dev->factory_pid = LGE_FACTORY_PID;
 
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+	platform_driver_register(&lg_diag_cmd_driver);
+#endif
 	return platform_driver_probe(&lge_android_usb_platform_driver,
 			lgeusb_probe);
 }

@@ -1203,4 +1203,13 @@ config USB_G_LGE_MULTIPLE_CONFIGURATION
 
 	default n
 
+config LGE_DIAG_USB_ACCESS_LOCK
+	boolean "feature for usb diag access lock"
+	help
+	  this feature should be applied to meet usb diag lock requirement
+
+	  Say y if this must be needed.
+
+	default n
+
 endif # USB_GADGET

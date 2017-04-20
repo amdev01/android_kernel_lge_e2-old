@@ -111,6 +111,16 @@ struct tpiu_drvdata {
 	bool			nidnt_spmi;
 };
 
+static const char * const str_tpiu_out_mode[] = {
+	[TPIU_OUT_MODE_NONE]		= "none",
+	[TPIU_OUT_MODE_MICTOR]		= "mictor",
+	[TPIU_OUT_MODE_SDC_TRACE]	= "sdc",
+	[TPIU_OUT_MODE_SDC_SWDUART]	= "swduart",
+	[TPIU_OUT_MODE_SDC_SWDTRC]	= "swdtrc",
+	[TPIU_OUT_MODE_SDC_JTAG]	= "jtag",
+	[TPIU_OUT_MODE_SDC_SPMI]	= "spmi",
+};
+
 static int nidnt_boot_hw_detect;
 module_param_named(nidnt_boot_hw_detect,
 	nidnt_boot_hw_detect, int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -314,6 +324,9 @@ static int __tpiu_enable_to_sdc_trace(struct tpiu_drvdata *drvdata)
 	__tpiu_enable(drvdata, 0x8, 0x103);
 
 	if (drvdata->nidnthw) {
+		ret = coresight_nidnt_config_qdsd_enable(true);
+		if (ret)
+			goto err;
 		ret = coresight_nidnt_config_swoverride(NIDNT_MODE_SDC_TRACE);
 		if (ret)
 			goto err;
@@ -352,6 +365,10 @@ static int __tpiu_enable_to_sdc_swduart(struct tpiu_drvdata *drvdata)
 	__tpiu_enable(drvdata, 0x8, 0x103);
 
 	if (drvdata->nidnthw) {
+		ret = coresight_nidnt_config_qdsd_enable(true);
+		if (ret)
+			goto err1;
+
 		ret = coresight_nidnt_config_swoverride(NIDNT_MODE_SDC_SWDUART);
 		if (ret)
 			goto err1;
@@ -394,6 +411,10 @@ static int __tpiu_enable_to_sdc_swdtrc(struct tpiu_drvdata *drvdata)
 	__tpiu_enable(drvdata, 0x2, 0x103);
 
 	if (drvdata->nidnthw) {
+		ret = coresight_nidnt_config_qdsd_enable(true);
+		if (ret)
+			goto err1;
+
 		ret = coresight_nidnt_config_swoverride(NIDNT_MODE_SDC_SWDTRC);
 		if (ret)
 			goto err1;
@@ -420,9 +441,17 @@ static int __tpiu_enable_to_sdc_jtag(struct tpiu_drvdata *drvdata)
 	if (ret)
 		return ret;
 
+	ret = coresight_nidnt_config_qdsd_enable(true);
+	if (ret)
+		goto err;
+
 	ret = coresight_nidnt_config_swoverride(NIDNT_MODE_SDC_JTAG);
 	if (ret)
-		__tpiu_disable_to_sdc(drvdata);
+		goto err;
+
+	return 0;
+err:
+	__tpiu_disable_to_sdc(drvdata);
 	return ret;
 }
 
@@ -434,9 +463,17 @@ static int __tpiu_enable_to_sdc_spmi(struct tpiu_drvdata *drvdata)
 	if (ret)
 		return ret;
 
+	ret = coresight_nidnt_config_qdsd_enable(true);
+	if (ret)
+		goto err;
+
 	ret = coresight_nidnt_config_swoverride(NIDNT_MODE_SDC_SPMI);
 	if (ret)
-		__tpiu_disable_to_sdc(drvdata);
+		goto err;
+
+	return 0;
+err:
+	__tpiu_disable_to_sdc(drvdata);
 	return ret;
 }
 
@@ -630,8 +667,9 @@ static ssize_t tpiu_show_out_mode(struct device *dev,
 				      struct device_attribute *attr, char *buf)
 {
 	struct tpiu_drvdata *drvdata = dev_get_drvdata(dev->parent);
-	ssize_t len;
+	ssize_t len = 0;
 	uint32_t reg = 0;
+	int i;
 
 	mutex_lock(&drvdata->mutex);
 
@@ -652,15 +690,11 @@ static ssize_t tpiu_show_out_mode(struct device *dev,
 				NIDNT_MODE_SDCARD ? "sdcard" : "mictor"))))));
 	} else {
 		/* check sw mode when nidnthw is unavailable or disabled */
-		len = scnprintf(buf, PAGE_SIZE, "%s\n",
-				drvdata->out_mode == TPIU_OUT_MODE_MICTOR ?
-				"mictor" : (drvdata->out_mode ==
-				TPIU_OUT_MODE_SDC_TRACE ? "sdc" :
-				(drvdata->out_mode == TPIU_OUT_MODE_SDC_SWDUART
-				 ? "swduart" : (drvdata->out_mode ==
-				TPIU_OUT_MODE_SDC_SWDTRC ? "swdtrc" :
-				(drvdata->out_mode == TPIU_OUT_MODE_SDC_JTAG ?
-				"JTAG" : "spmi")))));
+		for (i = 0; i < ARRAY_SIZE(str_tpiu_out_mode); i++) {
+			if (drvdata->out_mode == i)
+				len = scnprintf(buf, PAGE_SIZE, "%s\n",
+						str_tpiu_out_mode[i]);
+		}
 	}
 	mutex_unlock(&drvdata->mutex);
 	return len;
@@ -681,7 +715,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 
 	mutex_lock(&drvdata->mutex);
 
-	if (!strcmp(str, "mictor")) {
+	if (!strcmp(str, str_tpiu_out_mode[TPIU_OUT_MODE_MICTOR])) {
 		if (drvdata->out_mode == TPIU_OUT_MODE_MICTOR)
 			goto out;
 
@@ -698,7 +732,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 			goto err;
 		}
 		drvdata->out_mode = TPIU_OUT_MODE_MICTOR;
-	} else if (!strcmp(str, "sdc")) {
+	} else if (!strcmp(str, str_tpiu_out_mode[TPIU_OUT_MODE_SDC_TRACE])) {
 		if (drvdata->out_mode == TPIU_OUT_MODE_SDC_TRACE)
 			goto out;
 
@@ -715,7 +749,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 			goto err;
 		}
 		drvdata->out_mode = TPIU_OUT_MODE_SDC_TRACE;
-	} else if (!strcmp(str, "swduart")) {
+	} else if (!strcmp(str, str_tpiu_out_mode[TPIU_OUT_MODE_SDC_SWDUART])) {
 		if (!drvdata->nidnt_swduart) {
 			ret = -EINVAL;
 			goto err;
@@ -733,7 +767,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 			goto err;
 		}
 		drvdata->out_mode = TPIU_OUT_MODE_SDC_SWDUART;
-	} else if (!strcmp(str, "swdtrc")) {
+	} else if (!strcmp(str, str_tpiu_out_mode[TPIU_OUT_MODE_SDC_SWDTRC])) {
 		if (!drvdata->nidnt_swdtrc) {
 			ret = -EINVAL;
 			goto err;
@@ -751,7 +785,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 			goto err;
 		}
 		drvdata->out_mode = TPIU_OUT_MODE_SDC_SWDTRC;
-	} else if (!strcmp(str, "jtag")) {
+	} else if (!strcmp(str, str_tpiu_out_mode[TPIU_OUT_MODE_SDC_JTAG])) {
 		if (!drvdata->nidnt_jtag) {
 			ret = -EINVAL;
 			goto err;
@@ -769,7 +803,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 			goto err;
 		}
 		drvdata->out_mode = TPIU_OUT_MODE_SDC_JTAG;
-	} else if (!strcmp(str, "spmi")) {
+	} else if (!strcmp(str, str_tpiu_out_mode[TPIU_OUT_MODE_SDC_SPMI])) {
 		if (!drvdata->nidnt_spmi) {
 			ret = -EINVAL;
 			goto err;
@@ -798,6 +832,22 @@ err:
 }
 static DEVICE_ATTR(out_mode, S_IRUGO | S_IWUSR, tpiu_show_out_mode,
 		   tpiu_store_out_mode);
+
+static ssize_t tpiu_show_available_out_modes(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	int i;
+	ssize_t len = 0;
+
+	for (i = 0; i < ARRAY_SIZE(str_tpiu_out_mode); i++)
+		len += scnprintf(buf + len, PAGE_SIZE - len, "%s ",
+					str_tpiu_out_mode[i]);
+
+	len += scnprintf(buf + len, PAGE_SIZE - len, "\n");
+	return len;
+}
+static DEVICE_ATTR(available_out_modes, S_IRUGO, tpiu_show_available_out_modes,
+		   NULL);
 
 static const struct coresight_ops tpiu_cs_ops = {
 	.sink_ops	= &tpiu_sink_ops,
@@ -880,6 +930,7 @@ static DEVICE_ATTR(nidnt_debounce_value,
 
 static struct attribute *tpiu_attrs[] = {
 	&dev_attr_out_mode.attr,
+	&dev_attr_available_out_modes.attr,
 	&dev_attr_set.attr,
 	&dev_attr_nidnt_timeout_value.attr,
 	&dev_attr_nidnt_debounce_value.attr,
@@ -989,14 +1040,25 @@ static int tpiu_parse_of_data(struct platform_device *pdev,
 	if (ret)
 		return ret;
 
-	if (drvdata->nidnthw && nidnt_boot_hw_detect) {
-		ret = __tpiu_enable_to_sdc(drvdata);
-		if (ret)
-			return ret;
+	if (drvdata->nidnthw) {
+		if (nidnt_boot_hw_detect) {
+			ret = __tpiu_enable_to_sdc(drvdata);
+			if (ret)
+				return ret;
 
-		/* enable and configure nidnt hardware detect */
-		coresight_nidnt_set_hwdetect_param(true);
-		coresight_nidnt_enable_hwdetect();
+			/* enable and configure nidnt hardware detect */
+			coresight_nidnt_set_hwdetect_param(true);
+			coresight_nidnt_enable_hwdetect();
+			dev_info(dev, "NIDnT run-time PS enabled\n");
+		} else {
+			/* if hardware detect is disabled, disable QDSD */
+			ret = coresight_nidnt_config_qdsd_enable(false);
+			if (ret) {
+				dev_err(drvdata->dev, "failed to disable QDSD\n");
+				return ret;
+			}
+			dev_info(dev, "NIDnT on SDCARD only mode\n");
+		}
 	}
 	return 0;
 }

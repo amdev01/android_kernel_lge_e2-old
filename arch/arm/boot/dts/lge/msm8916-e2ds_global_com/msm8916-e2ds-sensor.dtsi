@@ -39,7 +39,7 @@
 		pinctrl-0 = <&apds9130_int_active>;
 		pinctrl-1 = <&apds9130_int_suspend>;
 		Avago,irq-gpio = <&msm_gpio 113 0x0>;
-		Avago,i2c-pull-up = <1>;
+		Avago,i2c-pull-up;
 		Avago,vdd_ana_supply_min = <2850000>;
 		Avago,vdd_ana_supply_max = <3300000>;
 		Avago,vdd_ana_load_ua = <15000>;
@@ -85,7 +85,7 @@
 		pinctrl-0 = <&bma2x2_int_active>;
 		pinctrl-1 = <&bma2x2_int_suspend>;
 		Bosch,irq-gpio = <&msm_gpio 115 0x00>;
-		Bosch,i2c-pull-up = <1>;
+		Bosch,i2c-pull-up;
 		Bosch,vdd_ana_supply_min = <2850000>;
 		Bosch,vdd_ana_supply_max = <3300000>;
 		Bosch,vdd_ana_load_ua = <15000>;
@@ -125,7 +125,7 @@
 		pinctrl-0 = <&bmm_drdy_active>;
 		pinctrl-1 = <&bmm_drdy_suspend>;
 		Bosch,irq-gpio = <&msm_gpio 69 0x00>;
-		Bosch,i2c-pull-up = <1>;
+		Bosch,i2c-pull-up;
 		Bosch,vdd_ana_supply_min = <2850000>;
 		Bosch,vdd_ana_supply_max = <3300000>;
 		Bosch,vdd_ana_load_ua = <15000>;

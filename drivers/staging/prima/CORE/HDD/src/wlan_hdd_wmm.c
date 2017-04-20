@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -18,25 +18,11 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 /*============================================================================
@@ -82,6 +68,7 @@
 #include <wlan_hdd_hostapd.h>
 #include <wlan_hdd_softap_tx_rx.h>
 #include <vos_sched.h>
+#include "sme_Api.h"
 
 // change logging behavior based upon debug flag
 #ifdef HDD_WMM_DEBUG
@@ -107,8 +94,8 @@
 #define DHCP_SOURCE_PORT 0x4400
 #define DHCP_DESTINATION_PORT 0x4300
 
-static sme_QosWmmUpType hddWmmDscpToUpMap[WLAN_HDD_MAX_DSCP+1];
 #define HDD_WMM_UP_TO_AC_MAP_SIZE 8
+
 const v_U8_t hddWmmUpToAcMap[] = {
    WLANTL_AC_BE,
    WLANTL_AC_BK,
@@ -243,8 +230,8 @@ static void hdd_wmm_enable_tl_uapsd (hdd_wmm_qos_context_t* pQosContext)
    pAc->wmmAcIsUapsdEnabled = psb;
 
    VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO,
-             "%s: Enabled UAPSD in TL srv_int=%ld "
-             "susp_int=%ld dir=%d AC=%d",
+             "%s: Enabled UAPSD in TL srv_int=%d "
+             "susp_int=%d dir=%d AC=%d",
              __func__,
              service_interval,
              suspension_interval,
@@ -445,7 +432,7 @@ static v_BOOL_t hdd_wmm_is_access_allowed(hdd_adapter_t* pAdapter,
    return VOS_TRUE;
 }
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
 /**
   @brief hdd_wmm_inactivity_timer_cb() - timer handler function which is
   called for every inactivity interval per AC. This function gets the
@@ -586,7 +573,7 @@ VOS_STATUS hdd_wmm_disable_inactivity_timer(hdd_wmm_qos_context_t* pQosContext)
 
     return vos_status;
 }
-#endif // FEATURE_WLAN_CCX
+#endif // FEATURE_WLAN_ESE
 
 /**
   @brief hdd_wmm_sme_callback() - callback registered by HDD with SME for receiving
@@ -689,7 +676,7 @@ static eHalStatus hdd_wmm_sme_callback (tHalHandle hHal,
          hdd_wmm_notify_app(pQosContext);
       }
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
       // Check if the inactivity interval is specified
       if (pCurrentQosInfo && pCurrentQosInfo->inactivity_interval) {
          VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO,
@@ -697,7 +684,7 @@ static eHalStatus hdd_wmm_sme_callback (tHalHandle hHal,
                  __func__, pCurrentQosInfo->inactivity_interval, acType);
          hdd_wmm_enable_inactivity_timer(pQosContext, pCurrentQosInfo->inactivity_interval);
       }
-#endif // FEATURE_WLAN_CCX
+#endif // FEATURE_WLAN_ESE
 
       // notify TL to enable trigger frames if necessary
       hdd_wmm_enable_tl_uapsd(pQosContext);
@@ -1397,7 +1384,7 @@ static void hdd_wmm_do_implicit_qos(struct work_struct *work)
       qosInfo.suspension_interval = (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->InfraUapsdBkSuspIntv;
       break;
    }
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
    qosInfo.inactivity_interval = (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->InfraInactivityInterval;
 #endif
    qosInfo.ts_info.burst_size_defn = (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->burstSizeDefinition;
@@ -1509,14 +1496,15 @@ static void hdd_wmm_do_implicit_qos(struct work_struct *work)
   and status to an initial state.  The configuration can later be overwritten
   via application APIs
 
-  @param pHddCtx : [in]  pointer to HDD context
+  @param pAdapter : [in]  pointer to Adapter context
 
-  @return         : VOS_STATUS_SUCCESS if succssful
+  @return         : VOS_STATUS_SUCCESS if successful
                   : other values if failure
 
   ===========================================================================*/
-VOS_STATUS hdd_wmm_init ( hdd_context_t* pHddCtx )
+VOS_STATUS hdd_wmm_init ( hdd_adapter_t *pAdapter )
 {
+   sme_QosWmmUpType* hddWmmDscpToUpMap = pAdapter->hddWmmDscpToUpMap;
    v_U8_t dscp;
 
    VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO_LOW,
@@ -1631,7 +1619,7 @@ VOS_STATUS hdd_wmm_adapter_close ( hdd_adapter_t* pAdapter )
    {
       pQosContext = list_first_entry(&pAdapter->hddWmmStatus.wmmContextList,
                                      hdd_wmm_qos_context_t, node);
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
       hdd_wmm_disable_inactivity_timer(pQosContext);
 #endif
 #ifdef WLAN_OPEN_SOURCE
@@ -1786,7 +1774,7 @@ v_VOID_t hdd_wmm_classify_pkt ( hdd_adapter_t* pAdapter,
       }
 
       dscp = (tos>>2) & 0x3f;
-      userPri = hddWmmDscpToUpMap[dscp];
+      userPri = pAdapter->hddWmmDscpToUpMap[dscp];
 
 #ifdef HDD_WMM_DEBUG
       VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO,
@@ -1871,7 +1859,7 @@ v_U16_t hdd_hostapd_select_queue(struct net_device * dev, struct sk_buff *skb)
    /*Get the Station ID*/
    if (VOS_STATUS_SUCCESS != hdd_softap_GetStaId(pAdapter, pDestMacAddress, &STAId))
    {
-      VOS_TRACE( VOS_MODULE_ID_HDD_SOFTAP, VOS_TRACE_LEVEL_ERROR,
+      VOS_TRACE( VOS_MODULE_ID_HDD_SOFTAP, VOS_TRACE_LEVEL_INFO,
             "%s: Failed to find right station", __func__);
       *pSTAId = HDD_WLAN_INVALID_STA_ID;
       goto done;
@@ -1905,7 +1893,14 @@ release_lock:
     spin_unlock_bh( &pAdapter->staInfo_lock );
 done:
    skb->priority = up;
-   queueIndex = hddLinuxUpToAcMap[skb->priority];
+   if(skb->priority < SME_QOS_WMM_UP_MAX)
+         queueIndex = hddLinuxUpToAcMap[skb->priority];
+   else
+   {
+       VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO,
+                 "%s: up=%d is going beyond max value", __func__, up);
+      queueIndex = hddLinuxUpToAcMap[SME_QOS_WMM_UP_BE];
+   }
 
    return queueIndex;
 }
@@ -1973,7 +1968,14 @@ v_U16_t hdd_wmm_select_queue(struct net_device * dev, struct sk_buff *skb)
    }
 done:
    skb->priority = up;
-   queueIndex = hddLinuxUpToAcMap[skb->priority];
+   if(skb->priority < SME_QOS_WMM_UP_MAX)
+         queueIndex = hddLinuxUpToAcMap[skb->priority];
+   else
+   {
+       VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO,
+                 "%s: up=%d is going beyond max value", __func__, up);
+      queueIndex = hddLinuxUpToAcMap[SME_QOS_WMM_UP_BE];
+   }
 
    return queueIndex;
 }
@@ -2133,6 +2135,7 @@ VOS_STATUS hdd_wmm_assoc( hdd_adapter_t* pAdapter,
 {
    tANI_U8 uapsdMask;
    VOS_STATUS status;
+   hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
 
    // when we associate we need to notify TL if it needs to enable
    // UAPSD for any access categories
@@ -2217,6 +2220,14 @@ VOS_STATUS hdd_wmm_assoc( hdd_adapter_t* pAdapter,
       VOS_ASSERT( VOS_IS_STATUS_SUCCESS( status ));
    }
 
+   status = sme_UpdateDSCPtoUPMapping(pHddCtx->hHal,
+       pAdapter->hddWmmDscpToUpMap, pAdapter->sessionId);
+
+   if (!VOS_IS_STATUS_SUCCESS( status ))
+   {
+       hdd_wmm_init( pAdapter );
+   }
+
    VOS_TRACE(VOS_MODULE_ID_HDD, WMM_TRACE_LEVEL_INFO_LOW,
              "%s: Exiting", __func__);
 
@@ -2294,6 +2305,24 @@ VOS_STATUS hdd_wmm_connect( hdd_adapter_t* pAdapter,
          pAdapter->hddWmmStatus.wmmAcStatus[ac].wmmAcAccessRequired = VOS_TRUE;
          pAdapter->hddWmmStatus.wmmAcStatus[ac].wmmAcAccessAllowed = VOS_FALSE;
          pAdapter->hddWmmStatus.wmmAcStatus[ac].wmmAcAccessGranted = VOS_FALSE;
+
+         /* Making TSPEC invalid here so downgrading can be happen while roaming
+          * It is expected this will be SET in hdd_wmm_sme_callback,once sme is
+          * done with the AddTspec.Here we avoid 11r and ccx based association
+          */
+#if defined (WLAN_FEATURE_VOWIFI_11R)
+         if(pRoamInfo->u.pConnectedProfile->AuthType != eCSR_AUTH_TYPE_FT_RSN &&
+            pRoamInfo->u.pConnectedProfile->AuthType != eCSR_AUTH_TYPE_FT_RSN_PSK
+#if defined (FEATURE_WLAN_ESE)
+            &&
+            pRoamInfo->u.pConnectedProfile->AuthType != eCSR_AUTH_TYPE_CCKM_WPA &&
+            pRoamInfo->u.pConnectedProfile->AuthType != eCSR_AUTH_TYPE_CCKM_RSN
+#endif
+            )
+#endif
+         {
+            pAdapter->hddWmmStatus.wmmAcStatus[ac].wmmAcTspecValid = VOS_FALSE;
+         }
       }
       else
       {
@@ -2630,7 +2659,7 @@ hdd_wlan_wmm_status_e hdd_wmm_delts( hdd_adapter_t* pAdapter,
       // need to tell TL to stop trigger timer, etc
       hdd_wmm_disable_tl_uapsd(pQosContext);
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
       // disable the inactivity timer
       hdd_wmm_disable_inactivity_timer(pQosContext);
 #endif

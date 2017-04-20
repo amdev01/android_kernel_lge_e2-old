@@ -32,6 +32,6 @@
 	};
 
         qcom,wdt@b017000 {
-                qcom,bark-time = <15000>;
+                qcom,bark-time = <17000>;
         };
 };

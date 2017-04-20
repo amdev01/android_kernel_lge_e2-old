@@ -98,7 +98,7 @@ struct wake_lock nfc_wake_lock;
 #if defined(BCM2079X_MTK_PLATFORM)
 
 #else
-struct	clk		*s_clk;
+struct clk *s_clk;
 #endif
 
 #if defined(BCM2079X_MTK_PLATFORM)
@@ -262,7 +262,7 @@ static irqreturn_t bcm2079x_dev_irq_handler(int irq, void *dev_id)
     struct bcm2079x_dev *bcm2079x_dev = g_bcm2079x_dev;
     pr_info("%s irq_gpio %d\n", __func__, mt_get_gpio_in(platform_data.irq_gpio));
 #else
-	struct bcm2079x_dev *bcm2079x_dev = dev_id;
+    struct bcm2079x_dev *bcm2079x_dev = dev_id;
     //pr_info("%s irq_gpio %d\n", __func__, gpio_get_value(platform_data.irq_gpio));
 #endif /*End of BCM2079X_MTK_PLATFORM*/
     wake_up(&bcm2079x_dev->read_wq);
@@ -299,10 +299,10 @@ static unsigned int bcm2079x_dev_poll(struct file *filp, poll_table *wait)
     if(gpio_get_value(platform_data.irq_gpio) == 1)  //irq gpio get
 #endif /*End of BCM2079X_MTK_PLATFORM*/
     {
-	    mask |= POLLIN | POLLRDNORM;
+        mask |= POLLIN | POLLRDNORM;
     }
 
-	spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
+    spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
 
     return mask;
 }
@@ -434,7 +434,7 @@ static long bcm2079x_dev_unlocked_ioctl(struct file *filp,
 {
     struct bcm2079x_dev *bcm2079x_dev = filp->private_data;
 
-	pr_info("%s,  cmd (%x) arg %lx \n", __func__, cmd, arg);
+    pr_info("%s,  cmd (%x) arg %lx \n", __func__, cmd, arg);
 
     switch (cmd) {
     case BCMNFC_READ_FULL_PACKET:
@@ -484,14 +484,14 @@ static int bcm2079x_probe(struct i2c_client *client,
                const struct i2c_device_id *id)
 {
     int ret;
-	struct bcm2079x_dev *bcm2079x_dev = NULL;
+    struct bcm2079x_dev *bcm2079x_dev = NULL;
 
-	bcm2079x_dev = kzalloc(sizeof(*bcm2079x_dev), GFP_KERNEL);
-	if (bcm2079x_dev == NULL) {
-		pr_err("failed to allocate memory for module data\n");
-		ret = -ENOMEM;
-		goto err_exit;
-	}
+    bcm2079x_dev = kzalloc(sizeof(*bcm2079x_dev), GFP_KERNEL);
+    if (bcm2079x_dev == NULL) {
+        pr_err("failed to allocate memory for module data\n");
+        ret = -ENOMEM;
+        goto err_exit;
+    }
 
 #if defined (BCM2079X_MTK_PLATFORM)
     g_bcm2079x_dev = bcm2079x_dev;

@@ -36,11 +36,6 @@
 extern int update_preset_lcdc_lut(void);
 #endif
 
-static void __init msm8916_early_memory(void)
-{
-	of_scan_flat_dt(dt_scan_for_memory_hole, NULL);
-}
-
 static void __init msm8916_dt_reserve(void)
 {
 	of_scan_flat_dt(dt_scan_for_memory_reserve, NULL);
@@ -156,11 +151,11 @@ void __init msm8916_add_drivers(void)
 #if defined(CONFIG_LCD_KCAL)
 	 lge_add_lcd_kcal_devices();
 #endif
-#ifdef CONFIG_LGE_QFPROM_INTERFACE
-	lge_add_qfprom_devices();
-#endif
 #if defined(CONFIG_PRE_SELF_DIAGNOSIS)
 	lge_add_pre_selfd_devices();
+#endif
+#ifdef CONFIG_LGE_QFPROM_INTERFACE
+	lge_add_qfprom_devices();
 #endif
 }
 
@@ -187,11 +182,53 @@ static const char *msm8916_dt_match[] __initconst = {
 	NULL
 };
 
-DT_MACHINE_START(MSM8916_DT, "Qualcomm MSM 8916 (Flattened Device Tree)")
+static const char *msm8936_dt_match[] __initconst = {
+	"qcom,msm8936",
+	NULL
+};
+
+static const char *msm8939_dt_match[] __initconst = {
+	"qcom,msm8939",
+	NULL
+};
+
+static const char *msmtellurium_dt_match[] __initconst = {
+       "qcom,msmtellurium",
+       NULL
+};
+
+DT_MACHINE_START(MSM8916_DT,
+		"Qualcomm Technologies, Inc. MSM 8916 (Flattened Device Tree)")
 	.map_io = msm8916_map_io,
 	.init_machine = msm8916_init,
 	.dt_compat = msm8916_dt_match,
 	.reserve = msm8916_dt_reserve,
-	.init_very_early = msm8916_early_memory,
 	.smp = &msm8916_smp_ops,
+MACHINE_END
+
+DT_MACHINE_START(MSM8939_DT,
+		"Qualcomm Technologies, Inc. MSM 8939 (Flattened Device Tree)")
+	.map_io = msm8916_map_io,
+	.init_machine = msm8916_init,
+	.dt_compat = msm8939_dt_match,
+	.reserve = msm8916_dt_reserve,
+	.smp = &msm8936_smp_ops,
+MACHINE_END
+
+DT_MACHINE_START(MSM8936_DT,
+		"Qualcomm Technologies, Inc. MSM 8936 (Flattened Device Tree)")
+	.map_io = msm8916_map_io,
+	.init_machine = msm8916_init,
+	.dt_compat = msm8936_dt_match,
+	.reserve = msm8916_dt_reserve,
+	.smp = &msm8936_smp_ops,
+MACHINE_END
+
+DT_MACHINE_START(MSMTellurium_DT,
+       "Qualcomm Technologies, Inc. MSM Tellurium (Flattened Device Tree)")
+       .map_io = msm8916_map_io,
+       .init_machine = msm8916_init,
+       .dt_compat = msmtellurium_dt_match,
+       .reserve = msm8916_dt_reserve,
+       .smp = &msm8936_smp_ops,
 MACHINE_END

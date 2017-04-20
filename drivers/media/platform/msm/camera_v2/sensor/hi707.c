@@ -89,7 +89,7 @@ static struct msm_sensor_power_setting hi707_power_setting[] = {
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
 		.config_val = GPIO_OUT_HIGH,
-		.delay = 2,
+		.delay = 31,
 	},
 	{
 		.seq_type = SENSOR_I2C_MUX,
@@ -386,9 +386,9 @@ static struct msm_camera_i2c_reg_conf hi707_recommend_settings[] = {
 		{0x10, 0x01},
 		{0x20, 0x80}, //60},   //XCEN LHC
 		{0x21, 0x80}, //YCEN
-		{0x22, 0x56}, //7d}, //_20131209 //88}, //7b}, //6a}, //50},
-		{0x23, 0x40}, //5d}, //_20131209 //5c}, //50}, //44}, //40},
-		{0x24, 0x38}, //48}, //_20131209 //49}, //44}, //32}, //3d},
+		{0x22, 0x7d}, //_20131209 //88}, //7b}, //6a}, //50},
+		{0x23, 0x5d}, //_20131209 //5c}, //50}, //44}, //40},
+		{0x24, 0x48}, //_20131209 //49}, //44}, //32}, //3d},
 
 		//////////////////////////// 15page
 		{0x03, 0x15},
@@ -417,23 +417,22 @@ static struct msm_camera_i2c_reg_conf hi707_recommend_settings[] = {
 		{0x47, 0x02},
 		{0x48, 0x02},
 		//////////////////////////// 16page
-		{0x03, 0x16}, //                                      
-		{0x10, 0x01},
+		{0x03, 0x16}, //gamma
 		{0x30, 0x00},
-		{0x31, 0x0f},
-		{0x32, 0x20},
-		{0x33, 0x35},
-		{0x34, 0x58},
-		{0x35, 0x75},
-		{0x36, 0x8e},
-		{0x37, 0xa3},
-		{0x38, 0xb4},
-		{0x39, 0xc3},
-		{0x3a, 0xcf},
-		{0x3b, 0xe2},
-		{0x3c, 0xf0},
-		{0x3d, 0xf9},
-		{0x3e, 0xff},
+		{0x31, 0x08},
+		{0x32, 0x1c},
+		{0x33, 0x2f},
+		{0x34, 0x53},
+		{0x35, 0x76},
+		{0x36, 0x93},
+		{0x37, 0xac},
+		{0x38, 0xc0},
+		{0x39, 0xd0},
+		{0x3a, 0xdc},
+		{0x3b, 0xed},
+		{0x3c, 0xf4}, //f7
+		{0x3d, 0xf6}, //fc
+		{0x3e, 0xfa}, //ff
 		//////////////////////////// 17page
 		{0x03, 0x17},
 		{0xc0, 0x01},
@@ -457,14 +456,14 @@ static struct msm_camera_i2c_reg_conf hi707_recommend_settings[] = {
 
 					 // 130521, Flicker Test
 		{0x60, 0x71}, //70}, //0x71}, //AE weight
-		{0x61, 0x11}, //0x11},
+		{0x61, 0x00}, //0x11},
 		{0x62, 0x71}, //70}, //0x71},
 		{0x63, 0x11}, //00}, //0x11},
 		{0x68, 0x32}, //3c}, //30}, //AE_CEN
 		{0x69, 0x6e}, //64}, //6a},
 		{0x6A, 0x50}, //27}, //27},
 		{0x6B, 0xa0}, //bb}, //bb},
-		{0x70, 0x3a}, //34}, 20130524  //Y Targe 32
+		{0x70, 0x36}, //34}, 20130524  //Y Targe 32
 		{0x76, 0x88}, //22}, // Unlock bnd1
 		{0x77, 0xfe}, //02}, // Unlock bnd2
 		{0x78, 0x22}, //23 //22}, 20130524  //12}, // Yth 1
@@ -489,7 +488,7 @@ static struct msm_camera_i2c_reg_conf hi707_recommend_settings[] = {
 		{0x8D, 0x30}, //EXP120
 		{0x8E, 0xd4},
 		{0x9c, 0x04}, //EXP Limit 1250.00 fps
-		{0x9d, 0xc4}, //b0 //lgit 20140328
+		{0x9d, 0xb0},
 		{0x9e, 0x00}, //EXP Unit
 		{0x9f, 0xc8},
 
@@ -604,7 +603,7 @@ static struct msm_camera_i2c_reg_conf hi707_recommend_settings[] = {
 		{0x10, 0xfb},
 
 };
-
+#if 0
 static struct msm_camera_i2c_reg_conf hi707_recommend_vt_settings[] = {
 
 	//2013.02.06 업데이트
@@ -1082,6 +1081,8 @@ static struct msm_camera_i2c_reg_conf hi707_recommend_vt_settings[] = {
 		{0x10, 0xfb},
 
 };
+#endif
+
 static struct msm_camera_i2c_reg_conf hi707_reg_effect_off[] = {
 	/* OFF */
 	{0x03, 0x10},
@@ -2124,6 +2125,7 @@ int32_t hi707_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			cdata->cfg.sensor_init_params.position,
 			cdata->cfg.sensor_init_params.sensor_mount_angle);
 		break;
+#if 0
 	case CFG_SET_SLAVE_INFO: {
 		struct msm_camera_sensor_slave_info sensor_slave_info;
 		struct msm_sensor_power_setting_array *power_setting_array;
@@ -2191,6 +2193,7 @@ int32_t hi707_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		kfree(power_setting_array->power_setting);
 		break;
 	}
+#endif
 	case CFG_WRITE_I2C_ARRAY: {
 		struct msm_camera_i2c_reg_setting conf_array;
 		struct msm_camera_i2c_reg_array *reg_setting = NULL;
@@ -2541,6 +2544,7 @@ int32_t hi707_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		break;
 	}
 /*                                                                                         */
+#if 0
 	case CFG_SET_INIT_SETTING_VT:{
 		pr_err("%s - vt init", __func__);
 		hi707_i2c_write_table(s_ctrl,
@@ -2548,6 +2552,7 @@ int32_t hi707_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		ARRAY_SIZE(hi707_recommend_vt_settings));
 		break;
 		}
+#endif
 	case CFG_SET_FRAMERATE_FOR_SOC:{
 		struct msm_fps_range_setting *framerate;
 		if (copy_from_user(&framerate, (void *)cdata->cfg.setting, sizeof(struct msm_fps_range_setting))) {

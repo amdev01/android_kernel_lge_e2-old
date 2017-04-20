@@ -1719,7 +1719,6 @@ static int bmm_probe(struct i2c_client *client, const struct i2c_device_id *id)
 #endif
 
 	PINFO("function entrance");
-
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		PERR("i2c_check_functionality error!");
 		err = -EIO;

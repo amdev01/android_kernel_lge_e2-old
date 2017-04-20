@@ -91,7 +91,6 @@ void get_dt_cn_prop_str(const char *name, char *value);
 void get_dt_cn_prop_u64(const char *name, uint64_t *u64);
 void get_dt_cn_prop_u32(const char *name, uint32_t *u32);
 
-
 enum lge_laf_mode_type {
 	LGE_LAF_MODE_NORMAL = 0,
 	LGE_LAF_MODE_LAF,
@@ -100,10 +99,6 @@ enum lge_laf_mode_type lge_get_laf_mode(void);
 
 #if defined(CONFIG_LCD_KCAL)
 void __init lge_add_lcd_kcal_devices(void);
-#endif
-
-#ifdef CONFIG_LGE_QFPROM_INTERFACE
-void __init lge_add_qfprom_devices(void);
 #endif
 
 #ifdef CONFIG_LGE_PM_PSEUDO_BATTERY
@@ -161,4 +156,8 @@ void __init lge_add_android_usb_devices(void);
 
 enum lge_boot_mode_type lge_get_boot_mode(void);
 int lge_get_factory_boot(void);
+#endif
+
+#ifdef CONFIG_LGE_QFPROM_INTERFACE
+void __init lge_add_qfprom_devices(void);
 #endif

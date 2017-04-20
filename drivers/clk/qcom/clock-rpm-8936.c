@@ -89,6 +89,10 @@ static DEFINE_CLK_VOTER(sysmmnoc_msmbus_a_clk,  &sysmmnoc_a_clk.c,  LONG_MAX);
 static DEFINE_CLK_VOTER(bimc_msmbus_a_clk,  &bimc_a_clk.c,  LONG_MAX);
 static DEFINE_CLK_VOTER(pcnoc_keepalive_a_clk, &pcnoc_a_clk.c, LONG_MAX);
 
+static DEFINE_CLK_VOTER(pcnoc_usb_a_clk, &pcnoc_a_clk.c,  LONG_MAX);
+static DEFINE_CLK_VOTER(snoc_usb_a_clk,  &snoc_a_clk.c,  LONG_MAX);
+static DEFINE_CLK_VOTER(bimc_usb_a_clk,  &bimc_a_clk.c,  LONG_MAX);
+
 /* Branch Voter clocks */
 static DEFINE_CLK_BRANCH_VOTER(xo_gcc, &xo_clk_src.c);
 static DEFINE_CLK_BRANCH_VOTER(xo_otg_clk, &xo_clk_src.c);
@@ -104,12 +108,14 @@ static struct mux_clk rpm_debug_mux = {
 	.base = &virt_base,
 	MUX_SRC_LIST(
 	{&snoc_clk.c,  0x0000},
+	{&sysmmnoc_clk.c, 0x0001},
 	{&pcnoc_clk.c, 0x0008},
-	/* BIMC_CLK is 2x clock to the BIMC Core as well as DDR, while the
-	 * axi clock is for the BIMC AXI interface. The AXI clock is 1/2 of
-	 * the BIMC Clock. measure the gcc_bimc_apss_axi_clk.
+	/* BIMC_CLK is 2x clock to the BIMC Core as well as DDR.
+	 * The BIMC Clock gcc_bimc_clk is 1/2 of BIMC_CLK, and
+	 * gcc_bimc_apss_axi_clk s not in-sync with gcc_bimc_clk,
+	 * so measure gcc_bimc_clk.
 	 */
-	{&bimc_clk.c,  0x0155},
+	{&bimc_clk.c,  0x0154},
 	),
 	.c = {
 		.dbg_name = "rpm_debug_mux",
@@ -138,6 +144,10 @@ static struct clk_lookup msm_clocks_rpm[] = {
 	CLK_LIST(bimc_msmbus_clk),
 	CLK_LIST(bimc_msmbus_a_clk),
 	CLK_LIST(pcnoc_keepalive_a_clk),
+
+	CLK_LIST(pcnoc_usb_a_clk),
+	CLK_LIST(snoc_usb_a_clk),
+	CLK_LIST(bimc_usb_a_clk),
 
 	/* CoreSight clocks */
 	CLK_LIST(qdss_clk),

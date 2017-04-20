@@ -50,6 +50,7 @@ enum {
 	HW_PLATFORM_FLUID   = 3,
 	HW_PLATFORM_SVLTE_FFA	= 4,
 	HW_PLATFORM_SVLTE_SURF	= 5,
+	HW_PLATFORM_MTP_MDM = 7,
 	HW_PLATFORM_MTP  = 8,
 	HW_PLATFORM_LIQUID  = 9,
 	/* Dragonboard platform id is assigned as 10 in CDT */
@@ -69,6 +70,7 @@ const char *hw_platform[] = {
 	[HW_PLATFORM_FLUID] = "Fluid",
 	[HW_PLATFORM_SVLTE_FFA] = "SVLTE_FFA",
 	[HW_PLATFORM_SVLTE_SURF] = "SLVTE_SURF",
+	[HW_PLATFORM_MTP_MDM] = "MDM_MTP_NO_DISPLAY",
 	[HW_PLATFORM_MTP] = "MTP",
 	[HW_PLATFORM_LIQUID] = "Liquid",
 	[HW_PLATFORM_DRAGON] = "Dragon",
@@ -396,9 +398,6 @@ static struct msm_soc_info cpu_of_id[] = {
 	[223] = {MSM_CPU_8226, "MSM8628"},
 	[224] = {MSM_CPU_8226, "MSM8928"},
 
-	/* 8092 IDs */
-	[146] = {MSM_CPU_8092, "MPQ8092"},
-
 	/* 8610 IDs */
 	[147] = {MSM_CPU_8610, "MSM8610"},
 	[161] = {MSM_CPU_8610, "MSM8110"},
@@ -456,9 +455,19 @@ static struct msm_soc_info cpu_of_id[] = {
 
 	/* 8936 IDs */
 	[233] = {MSM_CPU_8936, "MSM8936"},
+	[240] = {MSM_CPU_8936, "APQ8036"},
+	[242] = {MSM_CPU_8936, "MSM8236"},
 
 	/* 8939 IDs */
 	[239] = {MSM_CPU_8939, "MSM8939"},
+	[241] = {MSM_CPU_8939, "APQ8039"},
+	[263] = {MSM_CPU_8939, "MSM8239"},
+
+	/* 8909 IDs */
+	[245] = {MSM_CPU_8909, "MSM8909"},
+	[260] = {MSM_CPU_8909, "MDMFERRUM"},
+	[261] = {MSM_CPU_8909, "MDMFERRUM"},
+	[262] = {MSM_CPU_8909, "MDMFERRUM"},
 
 	/* ZIRC IDs */
 	[234] = {MSM_CPU_ZIRC, "MSMZIRC"},
@@ -466,6 +475,22 @@ static struct msm_soc_info cpu_of_id[] = {
 	[236] = {MSM_CPU_ZIRC, "MSMZIRC"},
 	[237] = {MSM_CPU_ZIRC, "MSMZIRC"},
 	[238] = {MSM_CPU_ZIRC, "MSMZIRC"},
+
+	/* 8994 ID */
+	[207] = {MSM_CPU_8994, "MSM8994"},
+	[253] = {MSM_CPU_8994, "APQ8094"},
+
+	/* 8992 ID */
+	[251] = {MSM_CPU_8992, "MSM8992"},
+
+	/* FSM9010 ID */
+	[254] = {FSM_CPU_9010, "FSM9010"},
+	[255] = {FSM_CPU_9010, "FSM9010"},
+	[256] = {FSM_CPU_9010, "FSM9010"},
+	[257] = {FSM_CPU_9010, "FSM9010"},
+
+	/* Tellurium ID */
+	[264] = {MSM_CPU_TELLURIUM, "MSMTELLURIUM"},
 
 	/* Uninitialized IDs are not known to run Linux.
 	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
@@ -954,11 +979,7 @@ static struct device_attribute select_image =
 
 static void * __init setup_dummy_socinfo(void)
 {
-	if (early_machine_is_mpq8092()) {
-		dummy_socinfo.id = 146;
-		strlcpy(dummy_socinfo.build_id, "mpq8092 - ",
-		sizeof(dummy_socinfo.build_id));
-	} else if (early_machine_is_apq8084()) {
+	if (early_machine_is_apq8084()) {
 		dummy_socinfo.id = 178;
 		strlcpy(dummy_socinfo.build_id, "apq8084 - ",
 			sizeof(dummy_socinfo.build_id));
@@ -966,9 +987,9 @@ static void * __init setup_dummy_socinfo(void)
 		dummy_socinfo.id = 187;
 		strlcpy(dummy_socinfo.build_id, "mdm9630 - ",
 			sizeof(dummy_socinfo.build_id));
-	} else if (early_machine_is_msmsamarium()) {
-		dummy_socinfo.id = 195;
-		strlcpy(dummy_socinfo.build_id, "msmsamarium - ",
+	} else if (early_machine_is_msm8909()) {
+		dummy_socinfo.id = 245;
+		strlcpy(dummy_socinfo.build_id, "msm8909 - ",
 			sizeof(dummy_socinfo.build_id));
 	} else if (early_machine_is_msm8916()) {
 		dummy_socinfo.id = 206;
@@ -985,6 +1006,18 @@ static void * __init setup_dummy_socinfo(void)
 	} else if (early_machine_is_msmzirc()) {
 		dummy_socinfo.id = 238;
 		strlcpy(dummy_socinfo.build_id, "msmzirc - ",
+			sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_msm8994()) {
+		dummy_socinfo.id = 207;
+		strlcpy(dummy_socinfo.build_id, "msm8994 - ",
+			sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_msm8992()) {
+		dummy_socinfo.id = 251;
+		strlcpy(dummy_socinfo.build_id, "msm8992 - ",
+			sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_msmtellurium()) {
+		dummy_socinfo.id = 264;
+		strlcpy(dummy_socinfo.build_id, "msmtellurium - ",
 			sizeof(dummy_socinfo.build_id));
 	}
 

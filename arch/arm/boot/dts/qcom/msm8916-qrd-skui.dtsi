@@ -15,64 +15,6 @@
 #include "msm8916-camera-sensor-qrd-skui.dtsi"
 
 &soc {
-	i2c@78b9000 { /* BLSP1 QUP5 */
-		focaltech@38 {
-			compatible = "focaltech,5x06";
-			reg = <0x38>;
-			interrupt-parent = <&msm_gpio>;
-			interrupts = <13 0x2008>;
-			vdd-supply = <&pm8916_l17>;
-			vcc_i2c-supply = <&pm8916_l6>;
-			/* pins used by touchscreen */
-			pinctrl-names = "pmx_ts_active","pmx_ts_suspend";
-			pinctrl-0 = <&ts_int_active &ts_reset_active>;
-			pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
-			focaltech,name = "ft6436";
-			focaltech,family-id = <0x36>;
-			focaltech,reset-gpio = <&msm_gpio 12 0x0>;
-			focaltech,irq-gpio = <&msm_gpio 13 0x2008>;
-			focaltech,display-coords = <0 0 480 854>;
-			focaltech,panel-coords = <0 0 480 950>;
-			focaltech,button-map= <139 102 158>;
-			focaltech,no-force-update;
-			focaltech,i2c-pull-up;
-			focaltech,group-id = <1>;
-			focaltech,hard-reset-delay-ms = <20>;
-			focaltech,soft-reset-delay-ms = <200>;
-			focaltech,num-max-touches = <5>;
-			focaltech,fw-delay-aa-ms = <30>;
-			focaltech,fw-delay-55-ms = <30>;
-			focaltech,fw-upgrade-id1 = <0x79>;
-			focaltech,fw-upgrade-id2 = <0x18>;
-			focaltech,fw-delay-readid-ms = <10>;
-			focaltech,fw-delay-era-flsh-ms = <2000>;
-			focaltech,fw-auto-cal;
-			focaltech,ignore-id-check;
-		};
-	};
-
-	gen-vkeys {
-		compatible = "qcom,gen-vkeys";
-		label = "ft5x06_ts";
-		qcom,disp-maxx = <480>;
-		qcom,disp-maxy = <854>;
-		qcom,panel-maxx = <480>;
-		qcom,panel-maxy = <946>;
-		qcom,key-codes = <139 172 158>;
-		qcom,y-offset = <0>;
-	};
-
-	flash_ocp8110:flashlight {
-		compatible = "qcom,leds-gpio-flash";
-		status = "okay";
-		pinctrl-names = "ocp8110_default";
-		pinctrl-0 = <&ocp8110_default>;
-		qcom,flash-en = <&msm_gpio 31 0>;
-		qcom,flash-now = <&msm_gpio 32 0>;
-		linux,name = "flashlight";
-		linux,default-trigger = "flashlight-trigger";
-	};
-
 	gpio-leds {
 		compatible = "gpio-leds";
 		status = "okay";
@@ -109,6 +51,36 @@
 				"cdc_lines_sus";
 		pinctrl-0 = <&cdc_pdm_lines_act>;
 		pinctrl-1 = <&cdc_pdm_lines_sus>;
+		asoc-platform = <&pcm0>, <&pcm1>, <&voip>, <&voice>,
+				<&loopback>, <&compress>, <&hostless>,
+				<&afe>, <&lsm>, <&routing>, <&lpa>;
+		asoc-platform-names = "msm-pcm-dsp.0", "msm-pcm-dsp.1",
+				"msm-voip-dsp", "msm-pcm-voice", "msm-pcm-loopback",
+				"msm-compress-dsp", "msm-pcm-hostless", "msm-pcm-afe",
+				"msm-lsm-client", "msm-pcm-routing", "msm-pcm-lpa";
+		asoc-cpu = <&dai_pri_auxpcm>, <&dai_hdmi>,
+				<&dai_mi2s0>, <&dai_mi2s1>, <&dai_mi2s2>, <&dai_mi2s3>,
+				<&sb_0_rx>, <&sb_0_tx>, <&sb_1_rx>, <&sb_1_tx>,
+				<&sb_3_rx>, <&sb_3_tx>, <&sb_4_rx>, <&sb_4_tx>,
+				<&bt_sco_rx>, <&bt_sco_tx>, <&int_fm_rx>, <&int_fm_tx>,
+				<&afe_pcm_rx>, <&afe_pcm_tx>, <&afe_proxy_rx>, <&afe_proxy_tx>,
+				<&incall_record_rx>, <&incall_record_tx>, <&incall_music_rx>,
+				<&incall_music_2_rx>;
+		asoc-cpu-names = "msm-dai-q6-auxpcm.1", "msm-dai-q6-hdmi.8",
+				"msm-dai-q6-mi2s.0", "msm-dai-q6-mi2s.1",
+				"msm-dai-q6-mi2s.2", "msm-dai-q6-mi2s.3",
+				"msm-dai-q6-dev.16384", "msm-dai-q6-dev.16385",
+				"msm-dai-q6-dev.16386", "msm-dai-q6-dev.16387",
+				"msm-dai-q6-dev.16390", "msm-dai-q6-dev.16391",
+				"msm-dai-q6-dev.16392", "msm-dai-q6-dev.16393",
+				"msm-dai-q6-dev.12288", "msm-dai-q6-dev.12289",
+				"msm-dai-q6-dev.12292", "msm-dai-q6-dev.12293",
+				"msm-dai-q6-dev.224", "msm-dai-q6-dev.225",
+				"msm-dai-q6-dev.241", "msm-dai-q6-dev.240",
+				"msm-dai-q6-dev.32771", "msm-dai-q6-dev.32772",
+				"msm-dai-q6-dev.32773", "msm-dai-q6-dev.32770";
+		asoc-codec = <&stub_codec>, <&pm8916_tombak_dig>;
+		asoc-codec-names = "msm-stub-codec.1", "tombak_codec";
 	};
 };
 
@@ -116,7 +88,7 @@
 	mpp@a300 { /* MPP 4 */
 		/* Backlight PWM */
 		qcom,mode = <1>;		/* Digital output */
-		qcom,invert = <0>;		/* Disable Invert */
+		qcom,invert = <0>;		/* Disable invert */
 		qcom,src-sel = <4>;		/* DTEST1 */
 		qcom,vin-sel = <0>;		/* VPH_PWR */
 		qcom,master-en = <1>;		/* Enable MPP */
@@ -146,17 +118,6 @@
 };
 
 &tlmm_pinmux {
-	ocp8110_pins {
-		qcom,pins = <&gp 31>, <&gp 32>;
-		qcom,num-grp-pins = <2>;
-		qcom,pin-func = <0>;
-		label = "ocp8110_pins";
-		ocp8110_default: en_default {
-			  drive-strength = <2>;
-			  bias-pull-down;
-		};
-	};
-
 	bma2x2_int1_pin {
 		qcom,pins = <&gp 112>;
 		qcom,num-grp-pins = <1>;
@@ -194,10 +155,10 @@
 		avago,ps-hysteresis-threshold = <500>;
 		avago,ps-pulse = <8>;
 		avago,ps-pgain = <0>;
-		avago,als-B = <223>;
-		avago,als-C = <70>;
-		avago,als-D = <142>;
-		avago,ga-value = <48>;
+		avago,als-B = <186>;
+		avago,als-C = <75>;
+		avago,als-D = <129>;
+		avago,ga-value = <768>;
 	};
 
 	bosch@18 { /* Accelerometer sensor */
@@ -215,6 +176,15 @@
 		bosch,gpio-int2 = <&msm_gpio 114 0x2002>;
 	};
 
+	memsic@30 { /* Magnetic field sensor */
+		compatible = "memsic,mmc3416x";
+		reg = <0x30>;
+		vdd-supply = <&pm8916_l17>;
+		vio-supply = <&pm8916_l6>;
+		memsic,dir = "obverse-x-axis-forward";
+		memsic,auto-report;
+	};
+
 	mpu6050@68 {
 		compatible = "invn,mpu6050";
 		reg = <0x68>;
@@ -229,20 +199,19 @@
 		invn,gpio-int = <&msm_gpio 115 0x2>;
 		invn,place = "Portrait Up Back Side";
 	};
+};
 
-	memsic@30 { /* Magnetic field sensor */
-		compatible = "memsic,mmc3416x";
-		reg = <0x30>;
-		vdd-supply = <&pm8916_l17>;
-		vio-supply = <&pm8916_l6>;
-		memsic,dir = "obverse-x-axis-forward";
-		memsic,auto-report;
-	};
+&sdc2_cd_on {
+	/delete-property/ bias-pull-up;
+	bias-pull-down;
+};
+
+&sdc2_cd_off {
+	/delete-property/ bias-disable;
+	bias-pull-down;
 };
 
 &sdhc_2 {
-	qcom,nonremovable;
-
 	interrupts = <0 1>;
 	interrupt-map = <0 &intc 0 125 0
 		1 &intc 0 221 0>;

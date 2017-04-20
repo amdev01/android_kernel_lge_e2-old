@@ -17,7 +17,9 @@ DEFINE_MSM_MUTEX(hi544_mut);
 
 static struct msm_sensor_ctrl_t hi544_s_ctrl;
 
-#if defined(CONFIG_MACH_MSM8916_E2_GLOBAL_COM) || defined(CONFIG_MACH_MSM8916_E2DS_GLOBAL_COM) || defined(CONFIG_MACH_MSM8916_E2N_GLOBAL_COM)
+#if defined(CONFIG_MACH_MSM8916_E2_GLOBAL_COM) \
+	|| defined(CONFIG_MACH_MSM8916_E2DS_GLOBAL_COM) \
+    || defined(CONFIG_MACH_MSM8916_E2N_GLOBAL_COM)
 static struct msm_sensor_power_setting hi544_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
@@ -55,7 +57,6 @@ static struct msm_sensor_power_setting hi544_power_setting[] = {
 		.config_val = 0,
 		.delay = 11, // >= 10msec
 	},
-	//HI544 has no external-RESET-pin control
 	{
 		.seq_type = SENSOR_I2C_MUX,
 		.seq_val = 0,

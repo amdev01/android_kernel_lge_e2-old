@@ -31,7 +31,7 @@
 #include "mdss_mdp.h"
 
 #define STATUS_CHECK_INTERVAL_MS 5000
-#define STATUS_CHECK_INTERVAL_MIN_MS 200
+#define STATUS_CHECK_INTERVAL_MIN_MS 50
 #define DSI_STATUS_CHECK_DISABLE 0
 
 static uint32_t interval = STATUS_CHECK_INTERVAL_MS;
@@ -60,7 +60,42 @@ static void check_dsi_ctrl_status(struct work_struct *work)
 		return;
 	}
 
+	if (mdss_panel_is_power_off(pdsi_status->mfd->panel_power_state)) {
+		pr_err("%s: panel off\n", __func__);
+		return;
+	}
+
 	pdsi_status->mfd->mdp.check_dsi_status(work, interval);
+}
+
+/*
+ * hw_vsync_handler() - Interrupt handler for HW VSYNC signal.
+ * @irq		: irq line number
+ * @data	: Pointer to the device structure.
+ *
+ * This function is called whenever a HW vsync signal is received from the
+ * panel. This resets the timer of ESD delayed workqueue back to initial
+ * value.
+ */
+irqreturn_t hw_vsync_handler(int irq, void *data)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata =
+			(struct mdss_dsi_ctrl_pdata *)data;
+	if (!ctrl_pdata) {
+		pr_err("%s: DSI ctrl not available\n", __func__);
+		return IRQ_HANDLED;
+	}
+
+	if (pstatus_data)
+		mod_delayed_work(system_wq, &pstatus_data->check_status,
+			msecs_to_jiffies(interval));
+	else
+		pr_err("Pstatus data is NULL\n");
+
+	if (!atomic_read(&ctrl_pdata->te_irq_ready))
+		atomic_inc(&ctrl_pdata->te_irq_ready);
+
+	return IRQ_HANDLED;
 }
 
 /*
@@ -82,9 +117,15 @@ static int fb_event_callback(struct notifier_block *self,
 				struct dsi_status_data, fb_notifier);
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_info *pinfo;
+	struct msm_fb_data_type *mfd;
 
-	pdata->mfd = evdata->info->par;
-	ctrl_pdata = container_of(dev_get_platdata(&pdata->mfd->pdev->dev),
+	if (!evdata) {
+		pr_err("%s: event data not available\n", __func__);
+		return NOTIFY_BAD;
+	}
+
+	mfd = evdata->info->par;
+	ctrl_pdata = container_of(dev_get_platdata(&mfd->pdev->dev),
 				struct mdss_dsi_ctrl_pdata, panel_data);
 	if (!ctrl_pdata) {
 		pr_err("%s: DSI ctrl not available\n", __func__);
@@ -103,7 +144,8 @@ static int fb_event_callback(struct notifier_block *self,
 		return NOTIFY_DONE;
 	}
 
-	if (event == FB_EVENT_BLANK && evdata) {
+	pdata->mfd = evdata->info->par;
+	if (event == FB_EVENT_BLANK) {
 		int *blank = evdata->data;
 		struct dsi_status_data *pdata = container_of(self,
 				struct dsi_status_data, fb_notifier);

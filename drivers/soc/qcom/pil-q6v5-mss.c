@@ -42,10 +42,11 @@
 #define MAX_SSR_REASON_LEN	81U
 #define STOP_ACK_TIMEOUT_MS	1000
 
+/*                                                */
 struct lge_hw_smem_id2_type {
-	u32 sbl_log_meta_info;
-	u32 sbl_delta_time;
-	u32 lcd_maker;
+	uint32_t sbl_log_meta_info;
+	uint32_t sbl_delta_time;
+	uint32_t lcd_maker;
 	u32 build_info;             /* build type user:0 userdebug:1 eng:2 */
 	int modem_reset;
 };
@@ -91,13 +92,14 @@ static int check_modem_reset(struct modem_data *drv)
 	int ret = -EPERM;
 	struct lge_hw_smem_id2_type *smem_id2;
 
-	smem_id2 = smem_get_entry(SMEM_ID_VENDOR2, &size, 0,
-							SMEM_ANY_HOST_FLAG);
+	smem_id2 = smem_get_entry(SMEM_ID_VENDOR2, &size, 0, SMEM_ANY_HOST_FLAG);
 
 	if (smem_id2 == NULL) {
 		pr_err("%s: smem_id2 is NULL.\n", __func__);
 		return ret;
 	}
+
+	printk("smem_id2->modem_reset : %d",smem_id2->modem_reset);
 
 	if(smem_id2->modem_reset != 1) {
 		ret = 1;
@@ -106,36 +108,9 @@ static int check_modem_reset(struct modem_data *drv)
 		drv->ignore_errors = true;
 		subsys_modem_restart();
 		ret = 0;
-
 	}
 	return ret;
 }
-
-//                                                                                          
-static int check_adsp_crash(struct modem_data *drv)
-{
-  u32 size;
-  int ret = -EPERM;
-  struct lge_hw_smem_id2_type *smem_id2;
-  
-  smem_id2 = smem_get_entry(SMEM_ID_VENDOR2, &size, 0, 0);
-  
-  if (smem_id2 == NULL) {
-    pr_err("%s:[MOOK] smem_id2 is NULL.\n", __func__);
-    return ret;
-  }
-  
-  if(smem_id2->modem_reset != 9) {
-    pr_err("%s: No ADSP Crash!! = %d\n", __func__,smem_id2->modem_reset);
-    ret = 1;
-  } else {
-    pr_err("%s: ADSP Crash!! = %d\n", __func__,smem_id2->modem_reset);
-    drv->subsys_desc.name = "adsp";
-    ret = 0;
-  }
-  return ret;
-}
-//                                                                                        
 
 static irqreturn_t modem_err_fatal_intr_handler(int irq, void *dev_id)
 {
@@ -150,14 +125,6 @@ static irqreturn_t modem_err_fatal_intr_handler(int irq, void *dev_id)
 
 	if (check_modem_reset(drv) == 0)
 		return IRQ_HANDLED;
-
-//                                                                                          
-    if(check_adsp_crash(drv) == 0)
-    {
-      pr_err("%s: ADSP Crash done!\n",__func__);
-      //return IRQ_HANDLED;
-    }
-//                                                                                        
 
 	restart_modem(drv);
 	return IRQ_HANDLED;
@@ -179,13 +146,21 @@ static int modem_shutdown(const struct subsys_desc *subsys, bool force_stop)
 	if (subsys->is_not_loadable)
 		return 0;
 
-	if (!subsys_get_crash_status(drv->subsys) && force_stop) {
+	if (!subsys_get_crash_status(drv->subsys) && force_stop &&
+	    subsys->force_stop_gpio) {
 		gpio_set_value(subsys->force_stop_gpio, 1);
 		ret = wait_for_completion_timeout(&drv->stop_ack,
 				msecs_to_jiffies(STOP_ACK_TIMEOUT_MS));
 		if (!ret)
 			pr_warn("Timed out on stop ack from modem.\n");
 		gpio_set_value(subsys->force_stop_gpio, 0);
+	}
+
+	if (drv->subsys_desc.ramdump_disable_gpio) {
+		drv->subsys_desc.ramdump_disable = gpio_get_value(
+					drv->subsys_desc.ramdump_disable_gpio);
+		 pr_warn("Ramdump disable gpio value is %d\n",
+			drv->subsys_desc.ramdump_disable);
 	}
 
 	pil_shutdown(&drv->q6->desc);
@@ -205,6 +180,7 @@ static int modem_powerup(const struct subsys_desc *subsys)
 	 * to unset the flag below.
 	 */
 	INIT_COMPLETION(drv->stop_ack);
+	drv->subsys_desc.ramdump_disable = 0;
 	drv->ignore_errors = false;
 	return pil_boot(&drv->q6->desc);
 }
@@ -213,7 +189,8 @@ static void modem_crash_shutdown(const struct subsys_desc *subsys)
 {
 	struct modem_data *drv = subsys_to_drv(subsys);
 	drv->crash_shutdown = true;
-	if (!subsys_get_crash_status(drv->subsys)) {
+	if (!subsys_get_crash_status(drv->subsys) &&
+		subsys->force_stop_gpio) {
 		gpio_set_value(subsys->force_stop_gpio, 1);
 		mdelay(STOP_ACK_TIMEOUT_MS);
 	}
@@ -239,10 +216,10 @@ static int modem_ramdump(int enable, const struct subsys_desc *subsys)
 	if (ret < 0)
 		pr_err("Unable to dump modem fw memory (rc = %d).\n", ret);
 
-	dma_free_coherent(&drv->mba_mem_dev, drv->q6->mba_size,
-				drv->q6->mba_virt, drv->q6->mba_phys);
+	ret = pil_mss_deinit_image(&drv->q6->desc);
+	if (ret < 0)
+		pr_err("Unable to free up resources (rc = %d).\n", ret);
 
-	pil_mss_shutdown(&drv->q6->desc);
 	pil_mss_remove_proxy_votes(&drv->q6->desc);
 	return ret;
 }
@@ -390,6 +367,11 @@ static int pil_mss_loadable_init(struct modem_data *drv,
 	q6->rom_clk = devm_clk_get(&pdev->dev, "mem_clk");
 	if (IS_ERR(q6->rom_clk))
 		return PTR_ERR(q6->rom_clk);
+
+	/* Optional. */
+	if (of_property_match_string(pdev->dev.of_node,
+			"qcom,active-clock-names", "gpll0_mss_clk") >= 0)
+		q6->gpll0_mss_clk = devm_clk_get(&pdev->dev, "gpll0_mss_clk");
 
 	ret = pil_desc_init(q6_desc);
 

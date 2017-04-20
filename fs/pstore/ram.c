@@ -385,6 +385,12 @@ static int ramoops_init_prz(struct device *dev, struct ramoops_context *cxt,
 	return 0;
 }
 
+void notrace ramoops_console_write_buf(const char *buf, size_t size)
+{
+	struct ramoops_context *cxt = &oops_cxt;
+	persistent_ram_write(cxt->cprz, buf, size);
+}
+
 #ifdef CONFIG_OF
 static int ramoops_parse_dt(struct device *dev, struct device_node *node)
 {

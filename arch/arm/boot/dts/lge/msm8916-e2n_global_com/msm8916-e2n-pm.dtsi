@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 and
@@ -33,15 +33,16 @@
 	qcom,vddsafe-mv = <4380>;
 	qcom,vinmin-mv = <4470>;
 	qcom,tchg-mins = <480>;
-	qcom,btc-disabled = <1>;
+	qcom,btc-disabled;
 	qcom,resume-soc = <98>;
 	qcom,disable-vbatdet-based-recharge;
 };
 
 &soc {
 	qcom,msm-thermal {
-		qcom,freq-control-mask = <0x0>;
-		qcom,core-control-mask = <0x0>;
+		qcom,freq-control-mask = <0xf>;
+		qcom,core-control-mask = <0xe>;
+		qcom,freq-mitigation-value = <800000>;
 		};
 };
 

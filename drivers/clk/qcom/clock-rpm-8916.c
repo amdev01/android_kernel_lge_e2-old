@@ -86,6 +86,10 @@ static DEFINE_CLK_VOTER(bimc_acpu_a_clk,    &bimc_a_clk.c,  LONG_MAX);
 static DEFINE_CLK_VOTER(pcnoc_keepalive_a_clk, &pcnoc_a_clk.c, LONG_MAX);
 static DEFINE_CLK_VOTER(pcnoc_sps_clk,        &pcnoc_a_clk.c, LONG_MAX);
 
+static DEFINE_CLK_VOTER(pcnoc_usb_a_clk, &pcnoc_a_clk.c,  LONG_MAX);
+static DEFINE_CLK_VOTER(snoc_usb_a_clk,  &snoc_a_clk.c,  LONG_MAX);
+static DEFINE_CLK_VOTER(bimc_usb_a_clk,  &bimc_a_clk.c,  LONG_MAX);
+
 /* Branch Voter clocks */
 static DEFINE_CLK_BRANCH_VOTER(xo_gcc, &xo_clk_src.c);
 static DEFINE_CLK_BRANCH_VOTER(xo_otg_clk, &xo_clk_src.c);
@@ -97,8 +101,9 @@ static DEFINE_CLK_BRANCH_VOTER(xo_wlan_clk, &xo_clk_src.c);
 static struct mux_clk rpm_debug_mux = {
 	.ops = &mux_reg_ops,
 	.offset = GCC_DEBUG_CLK_CTL,
-	.en_mask = BIT(16),
 	.mask = 0x1FF,
+	.en_offset = GCC_DEBUG_CLK_CTL,
+	.en_mask = BIT(16),
 	.base = &virt_base,
 	MUX_SRC_LIST(
 	{&snoc_clk.c,  0x0000},
@@ -135,6 +140,10 @@ static struct clk_lookup msm_clocks_rpm[] = {
 	CLK_LIST(bimc_msmbus_a_clk),
 	CLK_LIST(bimc_acpu_a_clk),
 	CLK_LIST(pcnoc_keepalive_a_clk),
+
+	CLK_LIST(pcnoc_usb_a_clk),
+	CLK_LIST(snoc_usb_a_clk),
+	CLK_LIST(bimc_usb_a_clk),
 
 	/* CoreSight clocks */
 	CLK_LIST(qdss_clk),

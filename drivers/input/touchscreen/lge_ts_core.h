@@ -34,6 +34,9 @@
 #define BATT_THERMAL		"/sys/class/hwmon/hwmon0/device/batt_therm"
 #define BATT_PRESENT		"/sys/class/power_supply/battery/present"
 
+#define I2C_ERROR		1
+#define RETRY_CNT		2
+
 struct touch_device_caps
 {
 	u8	button_support;

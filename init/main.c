@@ -460,7 +460,6 @@ static void smpl_count(void)
 	}
 }
 #endif
-
 /* Check for early params. */
 static int __init do_early_param(char *param, char *val, const char *unused)
 {
@@ -896,7 +895,6 @@ static int __ref kernel_init(void *unused)
 #ifdef CONFIG_LGE_PM_SMPL_COUNT
 	smpl_count();
 #endif
-
 	if (ramdisk_execute_command) {
 		if (!run_init_process(ramdisk_execute_command))
 			return 0;

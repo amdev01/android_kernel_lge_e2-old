@@ -34,11 +34,16 @@ int msm_comm_try_get_prop(struct msm_vidc_inst *inst,
 int msm_comm_set_scratch_buffers(struct msm_vidc_inst *inst);
 int msm_comm_set_persist_buffers(struct msm_vidc_inst *inst);
 int msm_comm_set_output_buffers(struct msm_vidc_inst *inst);
+int msm_comm_queue_output_buffers(struct msm_vidc_inst *inst);
 int msm_comm_qbuf(struct vb2_buffer *vb);
 void msm_comm_scale_clocks_and_bus(struct msm_vidc_inst *inst);
+void msm_comm_init_dcvs(struct msm_vidc_inst *inst);
+void msm_comm_init_dcvs_load(struct msm_vidc_inst *inst);
 int msm_comm_flush(struct msm_vidc_inst *inst, u32 flags);
-int msm_comm_release_scratch_buffers(struct msm_vidc_inst *inst);
+int msm_comm_release_scratch_buffers(struct msm_vidc_inst *inst,
+					bool check_for_reuse);
 int msm_comm_release_persist_buffers(struct msm_vidc_inst *inst);
+int msm_comm_release_output_buffers(struct msm_vidc_inst *inst);
 int msm_comm_force_cleanup(struct msm_vidc_inst *inst);
 int msm_comm_suspend(int core_id);
 enum hal_extradata_id msm_comm_get_hal_extradata_index(
@@ -68,4 +73,6 @@ int msm_comm_smem_get_domain_partition(struct msm_vidc_inst *inst,
 			u32 flags, enum hal_buffer buffer_type,
 			int *domain_num, int *partition_num);
 enum hal_video_codec get_hal_codec_type(int fourcc);
+int msm_comm_load_fw(struct msm_vidc_core *core);
+int msm_comm_check_core_init(struct msm_vidc_core *core);
 #endif

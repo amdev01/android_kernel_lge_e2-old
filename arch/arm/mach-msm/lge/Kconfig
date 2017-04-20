@@ -84,12 +84,11 @@ config PRE_SELF_DIAGNOSIS
 	depends on MACH_LGE
 	help
 	  LGE self diagnosis
-
+	  
 config LGE_QFPROM_INTERFACE
 	bool "Support qfprom interface"
 	default n
 	depends on MACH_LGE
 	help
-	  LGE QFPROM DRIVER.
-	  
+		LGE QFPROM DRIVER.
 endmenu
