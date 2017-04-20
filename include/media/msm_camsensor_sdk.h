@@ -249,7 +249,15 @@ struct msm_camera_i2c_reg_setting {
 	enum msm_camera_i2c_data_type data_type;
 	uint16_t delay;
 	enum msm_camera_qup_i2c_write_batch_t qup_i2c_batch;
+        uint16_t *value;        /*                                                            */
 };
+
+/*                                                                                                                   */
+struct msm_fps_range_setting{
+   int32_t min_fps;
+   int32_t max_fps;
+};
+/*                                                                                                                    */
 
 struct msm_camera_csid_vc_cfg {
 	uint8_t cid;
