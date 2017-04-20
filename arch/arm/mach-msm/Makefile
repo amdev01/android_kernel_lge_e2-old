@@ -33,8 +33,11 @@ obj-$(CONFIG_ARCH_MSM8974) += clock-rpm-8974.o clock-gcc-8974.o clock-mmss-8974.
 obj-$(CONFIG_KRAIT_REGULATOR) += krait-regulator.o  krait-regulator-pmic.o
 obj-$(CONFIG_ARCH_MDM9630) += board-9630.o board-9630-gpiomux.o
 obj-$(CONFIG_MSM_PP2S_FEMTO) += pp2s.o
-obj-$(CONFIG_ARCH_MSM8909) += board-8909.o
+obj-$(CONFIG_ARCH_MSMFERRUM) += board-ferrum.o
+ifndef CONFIG_MACH_LGE
 obj-$(CONFIG_ARCH_MSM8916) += board-8916.o
+endif
+obj-$(CONFIG_ARCH_MSM8909) += board-8909.o
 obj-$(CONFIG_ARCH_MSM8226) += board-8226.o board-8226-gpiomux.o
 obj-$(CONFIG_ARCH_MSM8226) += clock-8226.o clock-mdss-8974.o
 obj-$(CONFIG_ARCH_MSM8610) += board-8610.o board-8610-gpiomux.o
@@ -71,3 +74,5 @@ obj-$(CONFIG_MSM_SMCMOD) += smcmod.o
 obj-$(CONFIG_ARCH_MSM8974) += msm_mpmctr.o
 
 obj-$(CONFIG_PERFMAP) += perfmap.o
+
+obj-$(CONFIG_MACH_LGE) += lge/
