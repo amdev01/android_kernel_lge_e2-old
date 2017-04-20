@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -271,6 +271,27 @@ static void _retire_marker(struct kgsl_cmdbatch *cmdbatch)
 	kgsl_cmdbatch_destroy(cmdbatch);
 }
 
+static int _check_context_queue(struct adreno_context *drawctxt)
+{
+	int ret;
+
+	spin_lock(&drawctxt->lock);
+
+	/*
+	 * Wake up if there is room in the context or if the whole thing got
+	 * invalidated while we were asleep
+	 */
+
+	if (kgsl_context_invalid(&drawctxt->base))
+		ret = 1;
+	else
+		ret = drawctxt->queued < _context_cmdqueue_size ? 1 : 0;
+
+	spin_unlock(&drawctxt->lock);
+
+	return ret;
+}
+
 /*
  * return true if this is a marker command and the dependent timestamp has
  * retired
@@ -293,7 +314,6 @@ static struct kgsl_cmdbatch *_get_cmdbatch(struct adreno_context *drawctxt)
 {
 	struct kgsl_cmdbatch *cmdbatch = NULL;
 	bool pending = false;
-	unsigned long flags;
 
 	if (drawctxt->cmdqueue_head == drawctxt->cmdqueue_tail)
 		return NULL;
@@ -323,10 +343,15 @@ static struct kgsl_cmdbatch *_get_cmdbatch(struct adreno_context *drawctxt)
 			pending = true;
 	}
 
-	spin_lock_irqsave(&cmdbatch->lock, flags);
+	/*
+	 * We may have cmdbatch timer running, which also uses same lock,
+	 * take a lock with software interrupt disabled (bh) to avoid
+	 * spin lock recursion.
+	 */
+	spin_lock_bh(&cmdbatch->lock);
 	if (!list_empty(&cmdbatch->synclist))
 		pending = true;
-	spin_unlock_irqrestore(&cmdbatch->lock, flags);
+	spin_unlock_bh(&cmdbatch->lock);
 
 	/*
 	 * If changes are pending and the canary timer hasn't been
@@ -340,7 +365,7 @@ static struct kgsl_cmdbatch *_get_cmdbatch(struct adreno_context *drawctxt)
 		if (!timer_pending(&cmdbatch->timer))
 			mod_timer(&cmdbatch->timer, jiffies + (5 * HZ));
 
-		return ERR_PTR(-EBUSY);
+		return ERR_PTR(-EAGAIN);
 	}
 
 	/*
@@ -646,12 +671,11 @@ static int dispatcher_context_sendcmds(struct adreno_device *adreno_dev,
 	}
 
 	/*
-	 * If the context successfully submitted commands there will be room
-	 * in the context queue so wake up any snoozing threads that want to
-	 * submit commands
+	 * Wake up any snoozing threads if we have consumed any real commands
+	 * or marker commands and we have room in the context queue.
 	 */
 
-	if (count)
+	if (_check_context_queue(drawctxt))
 		wake_up_all(&drawctxt->wq);
 
 	if (!ret)
@@ -672,7 +696,7 @@ static int _adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 {
 	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 	struct adreno_context *drawctxt, *next;
-	struct plist_head requeue;
+	struct plist_head requeue, busy_list;
 	int ret;
 
 	/* Leave early if the dispatcher isn't in a happy state */
@@ -680,6 +704,7 @@ static int _adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 			return 0;
 
 	plist_head_init(&requeue);
+	plist_head_init(&busy_list);
 
 	/* Try to fill the ringbuffers as much as possible */
 	while (1) {
@@ -720,25 +745,26 @@ static int _adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 			/*
 			 * Check to seen if the context had been requeued while
 			 * we were processing it (probably by another thread
-			 * pushing commands). If it has then shift it to the
-			 * requeue list if it was not able to submit commands
-			 * due to the dispatch_q being full. Also, do a put to
-			 * make sure the reference counting stays accurate.
-			 * If the node is empty then we will put it on the
-			 * requeue list and not touch the refcount since we
-			 * already hold it from the first time it went on the
-			 * list.
+			 * pushing commands). If it has then do a put to make
+			 * sure the reference counting stays accurate.
+			 * If the dispatch_q is full then put it on the
+			 * busy list so it gets first preference when space
+			 * becomes available.
+			 * Otherwise put it on the requeue list since it may
+			 * have more commands.
 			 */
-			if (plist_node_empty(&drawctxt->pending)) {
-				plist_add(&drawctxt->pending, &requeue);
-			} else {
-				if (-EBUSY == ret) {
-					plist_del(&drawctxt->pending,
-							&dispatcher->pending);
-					plist_add(&drawctxt->pending, &requeue);
-				}
+
+			if (!plist_node_empty(&drawctxt->pending)) {
+				plist_del(&drawctxt->pending,
+						&dispatcher->pending);
 				kgsl_context_put(&drawctxt->base);
 			}
+
+			if (ret == -EBUSY)
+				/* Inflight queue is full */
+				plist_add(&drawctxt->pending, &busy_list);
+			else
+				plist_add(&drawctxt->pending, &requeue);
 
 			spin_unlock(&dispatcher->plist_lock);
 		} else {
@@ -751,10 +777,15 @@ static int _adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 		}
 	}
 
-	/* Put all the requeued contexts back on the master list */
-
 	spin_lock(&dispatcher->plist_lock);
 
+	/* Put the contexts that couldn't submit back on the pending list */
+	plist_for_each_entry_safe(drawctxt, next, &busy_list, pending) {
+		plist_del(&drawctxt->pending, &busy_list);
+		plist_add(&drawctxt->pending, &dispatcher->pending);
+	}
+
+	/* Now put the contexts that need to be requeued back on the list */
 	plist_for_each_entry_safe(drawctxt, next, &requeue, pending) {
 		plist_del(&drawctxt->pending, &requeue);
 		plist_add(&drawctxt->pending, &dispatcher->pending);
@@ -784,27 +815,6 @@ static int adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 
 	ret = _adreno_dispatcher_issuecmds(adreno_dev);
 	mutex_unlock(&dispatcher->mutex);
-
-	return ret;
-}
-
-static int _check_context_queue(struct adreno_context *drawctxt)
-{
-	int ret;
-
-	spin_lock(&drawctxt->lock);
-
-	/*
-	 * Wake up if there is room in the context or if the whole thing got
-	 * invalidated while we were asleep
-	 */
-
-	if (kgsl_context_invalid(&drawctxt->base))
-		ret = 1;
-	else
-		ret = drawctxt->queued < _context_cmdqueue_size ? 1 : 0;
-
-	spin_unlock(&drawctxt->lock);
 
 	return ret;
 }

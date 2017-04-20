@@ -79,7 +79,6 @@ struct pil_mdt {
  * struct pil_seg - memory map representing one segment
  * @next: points to next seg mentor NULL if last segment
  * @paddr: physical start address of segment
- * @vaddr: virtual start address of segment
  * @sz: size of segment
  * @filesz: size of segment on disk
  * @num: segment number

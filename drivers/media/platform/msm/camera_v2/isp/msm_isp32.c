@@ -379,6 +379,9 @@ static void msm_vfe32_process_reset_irq(struct vfe_device *vfe_dev,
 static void msm_vfe32_process_halt_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1)
 {
+	if (irq_status1 & (1 << 24)) {
+		msm_camera_io_w_mb(0, vfe_dev->vfe_base + 0x1D8);
+	}
 }
 
 static void msm_vfe32_process_camif_irq(struct vfe_device *vfe_dev,
@@ -458,6 +461,19 @@ static void msm_vfe32_process_violation_status(struct vfe_device *vfe_dev)
 		pr_err("%s: realign buf cb violation\n", __func__);
 	if (violation_status & BIT(24))
 		pr_err("%s: realign buf cr violation\n", __func__);
+}
+
+static void msm_vfe32_get_rdi_wm_mask(struct vfe_device *vfe_dev,
+	uint32_t *rdi_wm_mask)
+{
+	*rdi_wm_mask = vfe_dev->axi_data.rdi_wm_mask;
+}
+
+static void msm_vfe32_get_irq_mask(struct vfe_device *vfe_dev,
+	uint32_t *irq0_mask, uint32_t *irq1_mask)
+{
+	*irq0_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x1C);
+	*irq1_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x20);
 }
 
 static void msm_vfe32_process_error_status(struct vfe_device *vfe_dev)
@@ -898,6 +914,7 @@ static void msm_vfe32_update_camif_state(
 		val &= 0xFFFFFF3F;
 		val = val | bus_en << 7 | vfe_en << 6;
 		msm_camera_io_w(val, vfe_dev->vfe_base + 0x1E4);
+		msm_camera_io_w_mb(0x4, vfe_dev->vfe_base + 0x1E0);
 		msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x1E0);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 1;
 	} else if (update_state == DISABLE_CAMIF) {
@@ -1134,9 +1151,12 @@ static void msm_vfe32_update_ping_pong_addr(struct vfe_device *vfe_dev,
 
 static int msm_vfe32_axi_halt(struct vfe_device *vfe_dev, uint32_t blocking)
 {
-	uint32_t halt_mask;
 	uint32_t axi_busy_flag = true;
 
+	/* Keep only halt and restart mask */
+	msm_camera_io_w(0x01800000, vfe_dev->vfe_base + 0x20);
+	/*Clear IRQ Status */
+	msm_camera_io_w(0xFE7FFFFF, vfe_dev->vfe_base + 0x28);
 	msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x1D8);
 	while (axi_busy_flag) {
 		if (msm_camera_io_r(
@@ -1144,10 +1164,26 @@ static int msm_vfe32_axi_halt(struct vfe_device *vfe_dev, uint32_t blocking)
 			axi_busy_flag = false;
 	}
 	msm_camera_io_w_mb(0, vfe_dev->vfe_base + 0x1D8);
-	halt_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x20);
-	halt_mask &= 0xFEFFFFFF;
-	/* Disable AXI IRQ */
-	msm_camera_io_w_mb(halt_mask, vfe_dev->vfe_base + 0x20);
+	return 0;
+}
+
+static int msm_vfe32_axi_restart(struct vfe_device *vfe_dev,
+	uint32_t blocking, uint32_t enable_camif)
+{
+	vfe_dev->hw_info->vfe_ops.core_ops.restore_irq_mask(vfe_dev);
+
+	/*Clear IRQ Status */
+	msm_camera_io_w(0xFE7FFFFF, vfe_dev->vfe_base + 0x28);
+	msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x1D8);
+	/* Start AXI */
+	msm_camera_io_w(0x0, vfe_dev->vfe_base + 0x1D8);
+	vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev);
+	memset(&vfe_dev->error_info, 0, sizeof(vfe_dev->error_info));
+	atomic_set(&vfe_dev->error_info.overflow_state, NO_OVERFLOW);
+	if (enable_camif) {
+		vfe_dev->hw_info->vfe_ops.core_ops.
+		update_camif_state(vfe_dev, ENABLE_CAMIF);
+	}
 	return 0;
 }
 
@@ -1390,6 +1426,21 @@ static void msm_vfe32_get_error_mask(uint32_t *error_mask0,
 	*error_mask1 = 0x007FFFFF;
 }
 
+
+static void msm_vfe32_restore_irq_mask(struct vfe_device *vfe_dev)
+{
+	msm_camera_io_w(vfe_dev->error_info.overflow_recover_irq_mask0,
+		vfe_dev->vfe_base + 0x1C);
+	msm_camera_io_w(vfe_dev->error_info.overflow_recover_irq_mask1,
+		vfe_dev->vfe_base + 0x20);
+}
+
+static void msm_vfe32_get_halt_restart_mask(uint32_t *irq0_mask,
+	uint32_t *irq1_mask)
+{
+	*irq1_mask = 0x01800000;
+}
+
 struct msm_vfe_axi_hardware_info msm_vfe32_axi_hw_info = {
 	.num_wm = 5,
 	.num_comp_mask = 3,
@@ -1460,6 +1511,7 @@ struct msm_vfe_hardware_info vfe32_hw_info = {
 			.get_wm_mask = msm_vfe32_get_wm_mask,
 			.get_pingpong_status = msm_vfe32_get_pingpong_status,
 			.halt = msm_vfe32_axi_halt,
+			.restart = msm_vfe32_axi_restart,
 		},
 		.core_ops = {
 			.reg_update = msm_vfe32_reg_update,
@@ -1474,6 +1526,11 @@ struct msm_vfe_hardware_info vfe32_hw_info = {
 			.release_hw = msm_vfe32_release_hardware,
 			.get_platform_data = msm_vfe32_get_platform_data,
 			.get_error_mask = msm_vfe32_get_error_mask,
+			.get_rdi_wm_mask = msm_vfe32_get_rdi_wm_mask,
+			.get_irq_mask = msm_vfe32_get_irq_mask,
+			.restore_irq_mask = msm_vfe32_restore_irq_mask,
+			.get_halt_restart_mask =
+				msm_vfe32_get_halt_restart_mask,
 			.process_error_status = msm_vfe32_process_error_status,
 		},
 		.stats_ops = {

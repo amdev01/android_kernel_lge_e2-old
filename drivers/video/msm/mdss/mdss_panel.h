@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -178,8 +178,6 @@ struct mdss_intf_recovery {
  *				- 1: update to command mode
  * @MDSS_EVENT_REGISTER_RECOVERY_HANDLER: Event to recover the interface in
  *					case there was any errors detected.
- * @MDSS_EVENT_INTF_RESTORE: Event to restore the interface in case there
- *				was any errors detected during normal operation.
  */
 enum mdss_intf_events {
 	MDSS_EVENT_RESET = 1,
@@ -202,7 +200,6 @@ enum mdss_intf_events {
 	MDSS_EVENT_DSI_STREAM_SIZE,
 	MDSS_EVENT_DSI_DYNAMIC_SWITCH,
 	MDSS_EVENT_REGISTER_RECOVERY_HANDLER,
-	MDSS_EVENT_INTF_RESTORE,
 };
 
 struct lcd_panel_info {
@@ -281,7 +278,7 @@ struct mipi_panel_info {
 	/* The packet-size should not bet changed */
 	char no_max_pkt_size;
 	/* Clock required during LP commands */
-	char force_clk_lane_hs;
+	bool force_clk_lane_hs;
 
 	char vsync_enable;
 	char hw_vsync_mode;
@@ -393,6 +390,7 @@ struct mdss_panel_info {
 	u32 max_fps;
 
 	u32 cont_splash_enabled;
+	bool esd_rdy;
 	u32 partial_update_enabled;
 	u32 dcs_cmd_by_left;
 	u32 partial_update_roi_merge;
@@ -530,33 +528,6 @@ static inline int mdss_panel_get_htotal(struct mdss_panel_info *pinfo, bool
 	return adj_xres + pinfo->lcdc.h_back_porch +
 		pinfo->lcdc.h_front_porch +
 		pinfo->lcdc.h_pulse_width;
-}
-
-/**
- * mdss_mdp_max_fetch_lines: - Number of fetch lines in vertical front porch
- * @pinfo:	Pointer to panel info containing all panel information
- *
- * Returns the number of fetch lines in vertical front porch at which mdp
- * can start fetching the next frame.
- *
- * In some cases, vertical front porch is too high. In such cases limit
- * the mdp fetch lines  as the last 12 lines of vertical front porch.
- */
-static inline int mdss_mdp_max_fetch_lines(struct mdss_panel_info *pinfo)
-{
-	int fetch_lines;
-	int v_total, vfp_start;
-
-	v_total = mdss_panel_get_vtotal(pinfo);
-	vfp_start = (pinfo->lcdc.v_back_porch + pinfo->lcdc.v_pulse_width +
-			pinfo->yres);
-
-	fetch_lines = v_total - vfp_start;
-
-	if (fetch_lines > MDSS_MDP_MAX_FETCH)
-		fetch_lines = MDSS_MDP_MAX_FETCH;
-
-	return fetch_lines;
 }
 
 int mdss_register_panel(struct platform_device *pdev,

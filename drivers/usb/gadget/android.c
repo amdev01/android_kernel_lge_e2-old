@@ -899,8 +899,8 @@ static struct android_usb_function acm_function = {
 /* Supported functions initialization */
 
 /* laf */
-struct laf_data { 
-	bool opened; 
+struct laf_data {
+	bool opened;
 	bool enabled;
 };
 
@@ -3413,8 +3413,9 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	dev->check_charge_only = false;
 	if (!strcmp(b, "charge_only"))
 		dev->check_charge_only = true;
+#else
+	dev->cdev->gadget->streaming_enabled = false;
 #endif
-
 	while (b) {
 		conf_str = strsep(&b, ":");
 		if (!conf_str)
@@ -3988,10 +3989,6 @@ static void android_unbind_config(struct usb_configuration *c)
 {
 	struct android_dev *dev = cdev_to_android_dev(c->cdev);
 
-	if (c->cdev->gadget->streaming_enabled) {
-		c->cdev->gadget->streaming_enabled = false;
-		pr_debug("setting streaming_enabled to false.\n");
-	}
 	android_unbind_enabled_functions(dev, c);
 }
 
