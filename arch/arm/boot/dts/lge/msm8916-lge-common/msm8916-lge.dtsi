@@ -1,0 +1,37 @@
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../../qcom/msm8916.dtsi"
+#include "msm8916-lge-common.dtsi"
+
+&soc {
+	ramoops {
+		compatible = "ramoops";
+		qcom,memblock-remove = <0x90000000 0x100000>;
+		mem-size = <0x80000>;
+		mem-address = <0x90000000>;
+		record-size = <0>;
+		console-size = <0x40000>;
+		ftrace-size = <0x40000>;
+		dump-oops = <1>;
+	};
+
+	bootlog {
+		compatible = "bootlog";
+		buffer-address = <0x900c0000>;
+		size = <0x20000>;
+	};
+
+        qcom,wdt@b017000 {
+                qcom,bark-time = <17000>;
+        };
+};
