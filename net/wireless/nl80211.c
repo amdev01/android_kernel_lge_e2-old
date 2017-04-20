@@ -3082,6 +3082,7 @@ static int nl80211_parse_beacon(struct genl_info *info,
 	return 0;
 }
 
+#if 0 //1107 jayden hotspot patch- only this line
 static bool nl80211_get_ap_channel(struct cfg80211_registered_device *rdev,
 				   struct cfg80211_ap_settings *params)
 {
@@ -3108,6 +3109,7 @@ static bool nl80211_get_ap_channel(struct cfg80211_registered_device *rdev,
 	return ret;
 }
 
+#endif
 static bool nl80211_valid_auth_type(struct cfg80211_registered_device *rdev,
 				    enum nl80211_auth_type auth_type,
 				    enum nl80211_commands cmd)
@@ -3139,7 +3141,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 	struct wireless_dev *wdev = dev->ieee80211_ptr;
 	struct cfg80211_ap_settings params;
 	int err;
-	u8 radar_detect_width = 0;
+//	u8 radar_detect_width = 0;  hotspot patch  jayden
 
 	if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_AP &&
 	    dev->ieee80211_ptr->iftype != NL80211_IFTYPE_P2P_GO)
@@ -3246,6 +3248,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 			return -EINVAL;
 	}
 
+#if 0 //hotspot patch jayden
 	if (info->attrs[NL80211_ATTR_WIPHY_FREQ]) {
 		err = nl80211_parse_chandef(rdev, info, &params.chandef);
 		if (err)
@@ -3275,6 +3278,8 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 
 	if (err)
 		return err;
+
+#endif //jayden hotspot patch
 
 	if (info->attrs[NL80211_ATTR_ACL_POLICY]) {
 		params.acl = parse_acl_data(&rdev->wiphy, info);
@@ -7447,7 +7452,7 @@ static int nl80211_tx_mgmt(struct sk_buff *skb, struct genl_info *info)
 		if (!(rdev->wiphy.flags & WIPHY_FLAG_OFFCHAN_TX))
 			return -EINVAL;
 		wait = nla_get_u32(info->attrs[NL80211_ATTR_DURATION]);
-
+#if 0 /*                                                                                      */
 		/*
 		 * We should wait on the channel for at least a minimum amount
 		 * of time (10ms) but no longer than the driver supports.
@@ -7455,6 +7460,7 @@ static int nl80211_tx_mgmt(struct sk_buff *skb, struct genl_info *info)
 		if (wait < NL80211_MIN_REMAIN_ON_CHANNEL_TIME ||
 		    wait > rdev->wiphy.max_remain_on_channel_duration)
 			return -EINVAL;
+#endif /*                                                                                    */
 
 	}
 
