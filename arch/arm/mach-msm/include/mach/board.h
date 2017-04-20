@@ -191,6 +191,7 @@ struct msm_gpio_set_tbl {
 	uint32_t delay;
 };
 
+#if 0
 struct msm_camera_gpio_num_info {
 	uint16_t gpio_num[10];
 	uint8_t valid[10];
@@ -212,6 +213,7 @@ struct msm_camera_gpio_conf {
 	uint8_t camera_on_table_size;
 	struct msm_camera_gpio_num_info *gpio_num_info;
 };
+#endif
 
 enum msm_camera_i2c_mux_mode {
 	MODE_R,
