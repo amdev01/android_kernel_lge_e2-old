@@ -155,11 +155,25 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_TIME_TO_FULL_AVG,
 	POWER_SUPPLY_PROP_TYPE, /* use power_supply.type instead */
 	POWER_SUPPLY_PROP_SCOPE,
+#ifndef CONFIG_LGE_PM
 	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
+#endif
 	POWER_SUPPLY_PROP_RESISTANCE,
 	POWER_SUPPLY_PROP_RESISTANCE_CAPACITIVE,
 	/* unit is in ohms due to ID being typically in kohm range */
 	POWER_SUPPLY_PROP_RESISTANCE_ID,
+#ifdef CONFIG_LGE_PM_PSEUDO_BATTERY
+			POWER_SUPPLY_PROP_PSEUDO_BATT,
+#endif
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
+	POWER_SUPPLY_PROP_VALID_BATT,
+#endif
+#ifdef CONFIG_LGE_PM_FACTORY_TESTMODE
+	POWER_SUPPLY_PROP_HW_REV,
+#endif
+#ifdef CONFIG_LGE_PM
+	POWER_SUPPLY_PROP_CALCULATED_SOC,
+#endif
 	/* Local extensions */
 	POWER_SUPPLY_PROP_USB_HC,
 	POWER_SUPPLY_PROP_USB_OTG,
@@ -233,7 +247,7 @@ struct power_supply {
 	struct thermal_cooling_device *tcd;
 #endif
 
-#ifdef CONFIG_LEDS_TRIGGERS
+#if defined (CONFIG_LEDS_TRIGGERS) && !defined(CONFIG_LGE_PM)
 	struct led_trigger *charging_full_trig;
 	char *charging_full_trig_name;
 	struct led_trigger *charging_trig;
@@ -273,6 +287,8 @@ extern int power_supply_am_i_supplied(struct power_supply *psy);
 extern int power_supply_set_battery_charged(struct power_supply *psy);
 extern int power_supply_set_current_limit(struct power_supply *psy, int limit);
 extern int power_supply_set_voltage_limit(struct power_supply *psy, int limit);
+extern int power_supply_set_charging_enabled(struct power_supply *psy,
+					bool enable);
 extern int power_supply_set_online(struct power_supply *psy, bool enable);
 extern int power_supply_set_health_state(struct power_supply *psy, int health);
 extern int power_supply_set_present(struct power_supply *psy, bool enable);
