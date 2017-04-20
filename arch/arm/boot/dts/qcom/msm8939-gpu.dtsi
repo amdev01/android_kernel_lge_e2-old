@@ -72,7 +72,6 @@
 		              "gtcu_iface_clk", "gtcu_clk", "gtbu_clk";
 
 		/* Bus Scale Settings */
-		qcom,gpubw-dev = <&gpubw>;
 		qcom,msm-bus,name = "grp3d";
 		qcom,msm-bus,num-cases = <5>;
 		qcom,msm-bus,num-paths = <1>;
