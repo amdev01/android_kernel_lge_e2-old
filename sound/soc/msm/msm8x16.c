@@ -50,6 +50,8 @@
 #define WCD9XXX_MBHC_DEF_RLOADS 5
 #define DEFAULT_MCLK_RATE 9600000
 
+#define WCD_MBHC_DEF_BUTTONS 5
+extern bool is_pmic_rev_2;
 #define WCD_MBHC_DEF_RLOADS 5
 
 static int msm_btsco_rate = BTSCO_RATE_8KHZ;
@@ -65,12 +67,14 @@ static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 static int msm8x16_enable_extcodec_ext_clk(struct snd_soc_codec *codec,
 					int enable,	bool dapm);
 
+static void *def_msm8x16_wcd_mbhc_cal(void);
+
 static int conf_int_codec_mux(struct msm8916_asoc_mach_data *pdata);
 
 static struct wcd_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
 	.calibration = NULL,
-	.detect_extn_cable = true,
+	.detect_extn_cable = false,		//           
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = false,
@@ -1085,16 +1089,48 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	 * all btn_low corresponds to threshold for current source
 	 * all bt_high corresponds to threshold for Micbias
 	 */
-	btn_low[0] = 25;
+#if 1
+	/*       
+                                                              
+                                       
+  */
+	if (is_pmic_rev_2) {
+		btn_low[0] = 72;		/* Hook-Key */
+		btn_high[0] = 84;
+		btn_low[1] = 136;	/* Volume Up */
+		btn_high[1] = 148;
+		btn_low[2] = 212;	/* Volume Dn */
+		btn_high[2] = 248;
+		btn_low[3] = 412;
+		btn_high[3] = 448;
+		btn_low[4] = 412;
+		btn_high[4] = 448;
+		pr_info("[LGE MBHC] PMIC rev 2.0 cal. is applied.\n");
+	} else {
+		btn_low[0] = 0;		/* Hook-Key */
+		btn_high[0] = 150;
+		btn_low[1] = 151;	/* Volume Up */
+		btn_high[1] = 300;
+		btn_low[2] = 301;	/* Volume Dn */
+		btn_high[2] = 550;
+		btn_low[3] = 551;
+		btn_high[3] = 600;
+		btn_low[4] = 601;
+		btn_high[4] = 750;
+		pr_info("[LGE MBHC] PMIC rev 1.1 cal. is applied.\n");
+	}
+#else	/* Qualcomm Default Values */
+	btn_low[0] = 0;
 	btn_high[0] = 25;
-	btn_low[1] = 50;
+	btn_low[1] = 25;
 	btn_high[1] = 50;
-	btn_low[2] = 75;
+	btn_low[2] = 50;
 	btn_high[2] = 75;
-	btn_low[3] = 112;
+	btn_low[3] = 75;
 	btn_high[3] = 112;
-	btn_low[4] = 137;
+	btn_low[4] = 112;
 	btn_high[4] = 137;
+#endif
 
 	return msm8x16_wcd_cal;
 }

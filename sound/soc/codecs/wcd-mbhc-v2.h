@@ -14,6 +14,9 @@
 
 #include <linux/wait.h>
 #include "wcdcal-hwdep.h"
+//                                     
+#include <linux/switch.h>
+//                                     
 
 #define TOMBAK_MBHC_NC	0
 #define TOMBAK_MBHC_NO	1
@@ -197,6 +200,9 @@ struct wcd_mbhc {
 	/* Work to correct accessory type */
 	struct work_struct correct_plug_swch;
 	struct notifier_block nblock;
+//                                     
+	struct switch_dev sdev;
+//                                     
 };
 #define WCD_MBHC_CAL_SIZE(buttons, rload) ( \
 	sizeof(struct wcd_mbhc_general_cfg) + \
