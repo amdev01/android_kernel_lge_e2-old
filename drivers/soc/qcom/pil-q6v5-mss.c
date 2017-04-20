@@ -31,6 +31,7 @@
 #include <soc/qcom/ramdump.h>
 #include <soc/qcom/smem.h>
 #include <soc/qcom/smsm.h>
+#include <mach/board_lge.h>
 
 #include "peripheral-loader.h"
 #include "pil-q6v5.h"
@@ -40,6 +41,15 @@
 #define PROXY_TIMEOUT_MS	10000
 #define MAX_SSR_REASON_LEN	81U
 #define STOP_ACK_TIMEOUT_MS	1000
+
+/*                                                */
+struct lge_hw_smem_id2_type {
+	uint32_t sbl_log_meta_info;
+	uint32_t sbl_delta_time;
+	uint32_t lcd_maker;
+	u32 build_info;             /* build type user:0 userdebug:1 eng:2 */
+	int modem_reset;
+};
 
 #define subsys_to_drv(d) container_of(d, struct modem_data, subsys_desc)
 
@@ -61,6 +71,9 @@ static void log_modem_sfr(void)
 
 	strlcpy(reason, smem_reason, min(size, MAX_SSR_REASON_LEN));
 	pr_err("modem subsystem failure reason: %s.\n", reason);
+#if defined(CONFIG_PRE_SELF_DIAGNOSIS)
+	lge_pre_self_diagnosis((char *) "modem",3,(char *) "modem failed",(char *) reason, 20001);
+#endif
 
 	smem_reason[0] = '\0';
 	wmb();
@@ -73,6 +86,32 @@ static void restart_modem(struct modem_data *drv)
 	subsystem_restart_dev(drv->subsys);
 }
 
+static int check_modem_reset(struct modem_data *drv)
+{
+	u32 size;
+	int ret = -EPERM;
+	struct lge_hw_smem_id2_type *smem_id2;
+
+	smem_id2 = smem_get_entry(SMEM_ID_VENDOR2, &size, 0, SMEM_ANY_HOST_FLAG);
+
+	if (smem_id2 == NULL) {
+		pr_err("%s: smem_id2 is NULL.\n", __func__);
+		return ret;
+	}
+
+	printk("smem_id2->modem_reset : %d",smem_id2->modem_reset);
+
+	if(smem_id2->modem_reset != 1) {
+		ret = 1;
+	} else {
+		wmb();
+		drv->ignore_errors = true;
+		subsys_modem_restart();
+		ret = 0;
+	}
+	return ret;
+}
+
 static irqreturn_t modem_err_fatal_intr_handler(int irq, void *dev_id)
 {
 	struct modem_data *drv = subsys_to_drv(dev_id);
@@ -83,6 +122,10 @@ static irqreturn_t modem_err_fatal_intr_handler(int irq, void *dev_id)
 
 	pr_err("Fatal error on the modem.\n");
 	subsys_set_crash_status(drv->subsys, true);
+
+	if (check_modem_reset(drv) == 0)
+		return IRQ_HANDLED;
+
 	restart_modem(drv);
 	return IRQ_HANDLED;
 }
@@ -187,6 +230,10 @@ static irqreturn_t modem_wdog_bite_intr_handler(int irq, void *dev_id)
 	if (drv->ignore_errors)
 		return IRQ_HANDLED;
 	pr_err("Watchdog bite received from modem software!\n");
+#if defined(CONFIG_PRE_SELF_DIAGNOSIS)
+	lge_pre_self_diagnosis((char *) "modem",2,(char *) "Watchdog bite Intr",(char *) "_", 20000);
+#endif
+
 	subsys_set_crash_status(drv->subsys, true);
 	restart_modem(drv);
 	return IRQ_HANDLED;

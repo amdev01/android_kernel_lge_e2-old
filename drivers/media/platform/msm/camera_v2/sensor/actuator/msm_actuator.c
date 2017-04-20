@@ -278,6 +278,10 @@ static int32_t msm_actuator_move_focus(
 	uint16_t target_lens_pos = 0;
 	int16_t dest_step_pos = move_params->dest_step_pos;
 	uint16_t curr_lens_pos = 0;
+	/*                                       */
+	//Add log for debug
+	uint16_t dest_lens_pos = 0;
+	/*                                       */
 	int dir = move_params->dir;
 	int32_t num_steps = move_params->num_steps;
 	struct msm_camera_i2c_reg_setting reg_setting;
@@ -311,8 +315,17 @@ static int32_t msm_actuator_move_focus(
 	}
 	curr_lens_pos = a_ctrl->step_position_table[a_ctrl->curr_step_pos];
 	a_ctrl->i2c_tbl_index = 0;
+	#if 0 //QMC Original
 	CDBG("curr_step_pos =%d dest_step_pos =%d curr_lens_pos=%d\n",
 		a_ctrl->curr_step_pos, dest_step_pos, curr_lens_pos);
+	#else
+	/*                                       */
+	//Add log for debug
+	dest_lens_pos = a_ctrl->step_position_table[dest_step_pos]; /*                                                                */
+	CDBG("curr_step_pos =%d dest_step_pos =%d curr_lens_pos=%d dest_lens_pos=%d\n",
+		a_ctrl->curr_step_pos, dest_step_pos, curr_lens_pos, dest_lens_pos); /*                                                                */
+	#endif
+	/*                                       */
 
 	while (a_ctrl->curr_step_pos != dest_step_pos) {
 		step_boundary =
@@ -412,6 +425,70 @@ static int32_t msm_actuator_park_lens(struct msm_actuator_ctrl_t *a_ctrl)
 
 	return 0;
 }
+
+/*                                       */
+//Define the function to avoid tick sound before actuator close
+static int32_t msm_actuator_stable_lens(struct msm_actuator_ctrl_t *a_ctrl)
+{
+	int32_t rc = 0;
+	uint16_t next_lens_pos = 0;
+	uint16_t min_code_per_step = 20;
+	struct msm_camera_i2c_reg_setting reg_setting;
+
+	a_ctrl->i2c_tbl_index = 0;
+	if ((a_ctrl->curr_step_pos > a_ctrl->total_steps) ||
+		(!a_ctrl->step_position_table) ||
+		(!a_ctrl->i2c_reg_tbl) ||
+		(!a_ctrl->func_tbl) ||
+		(!a_ctrl->func_tbl->actuator_parse_i2c_params)) {
+		pr_err("%s:%d Unable to stable lens 1.\n",
+			__func__, __LINE__);
+		return 0;
+	}
+
+	next_lens_pos = a_ctrl->step_position_table[a_ctrl->curr_step_pos];
+	while (next_lens_pos) {
+		if ((!a_ctrl->step_position_table) ||
+			(!a_ctrl->i2c_reg_tbl) ||
+			(!a_ctrl->func_tbl) ||
+			(!a_ctrl->func_tbl->actuator_parse_i2c_params)) {
+			pr_err("%s:%d Unable to stable lens 2.\n", __func__, __LINE__);
+			return 0;
+		}
+
+		if (next_lens_pos > (a_ctrl->step_position_table[a_ctrl->total_steps] / 2))
+		{
+			next_lens_pos = (uint16_t)(a_ctrl->step_position_table[a_ctrl->total_steps] * 1 / 2);
+		}
+		else
+		{
+			next_lens_pos = (next_lens_pos > min_code_per_step) ?
+				(next_lens_pos - min_code_per_step) : 0;
+		}
+
+		a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
+			next_lens_pos, 0x0F, 100);
+
+		reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
+		reg_setting.size = a_ctrl->i2c_tbl_index;
+		reg_setting.data_type = a_ctrl->i2c_data_type;
+
+		rc = a_ctrl->i2c_client.i2c_func_tbl->
+			i2c_write_table_w_microdelay(
+			&a_ctrl->i2c_client, &reg_setting);
+		if (rc < 0) {
+			pr_err("%s Failed I2C write Line %d\n",
+				__func__, __LINE__);
+			return rc;
+		}
+		a_ctrl->i2c_tbl_index = 0;
+		/* Use typical damping time delay to avoid tick sound */
+		usleep_range(10000, 12000);
+	}
+
+	return 0;
+}
+/*                                       */
 
 static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 	struct msm_actuator_set_info_t *set_info)
@@ -851,6 +928,12 @@ static int msm_actuator_close(struct v4l2_subdev *sd,
 		pr_err("failed\n");
 		return -EINVAL;
 	}
+
+	/*                                       */
+	//Add the function to avoid tick sound before actuator close
+	msm_actuator_stable_lens(a_ctrl);
+	/*                                       */
+
 	if (a_ctrl->act_device_type == MSM_CAMERA_PLATFORM_DEVICE) {
 		rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_util(
 			&a_ctrl->i2c_client, MSM_CCI_RELEASE);

@@ -54,6 +54,10 @@
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -62,6 +66,10 @@
 
 #ifndef EXPORT_COMPAT
 #define EXPORT_COMPAT(x)
+#endif
+#ifdef CONFIG_MACH_LGE
+#include "mdss_mdp.h"
+#include "mdss_dsi.h"
 #endif
 
 #define MAX_FBI_LIST 32
@@ -1249,7 +1257,7 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 	if (mfd->dcm_state == DCM_ENTER)
 		return -EPERM;
 
-	pr_debug("%pS mode:%d\n", __builtin_return_address(0),
+	pr_info("%pS mode:%d\n", __builtin_return_address(0),
 		blank_mode);
 
 	cur_power_state = mfd->panel_power_state;
@@ -1271,13 +1279,13 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
-		pr_debug("unblank called. cur pwr state=%d\n", cur_power_state);
+		pr_info("unblank called. cur pwr state=%d\n", cur_power_state);
 		ret = mdss_fb_unblank_sub(mfd);
 		break;
 
 	case FB_BLANK_VSYNC_SUSPEND:
 		req_power_state = MDSS_PANEL_POWER_DOZE;
-		pr_debug("Doze power mode requested\n");
+		pr_info("Doze power mode requested\n");
 
 		/*
 		 * If doze mode is requested when panel is already off,
@@ -1978,6 +1986,12 @@ static int mdss_fb_register(struct msm_fb_data_type *mfd)
 
 	pr_info("FrameBuffer[%d] %dx%d registered successfully!\n", mfd->index,
 					fbi->var.xres, fbi->var.yres);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+        /* save fb address for crash handler display buffer */
+        if (mfd->index == 0)
+                lge_set_fb_addr((unsigned int)mfd->fbi->fix.smem_start);
+#endif
 
 	return 0;
 }
@@ -3215,6 +3229,10 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 	unsigned int dsi_mode = 0;
 	struct mdss_panel_data *pdata = NULL;
 
+#ifdef CONFIG_MACH_LGE
+	u32 dsi_panel_invert = 0;
+#endif
+
 	if (!info || !info->par)
 		return -EINVAL;
 
@@ -3293,6 +3311,15 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 
 		ret = mdss_fb_lpm_enable(mfd, dsi_mode);
 		break;
+
+#ifdef CONFIG_MACH_LGE
+	case MSMFB_INVERT_PANEL:
+		ret = copy_from_user(&dsi_panel_invert, argp, sizeof(int));
+		if(ret)
+			return ret;
+		ret = mdss_dsi_panel_invert(dsi_panel_invert);
+	break;
+#endif
 
 	default:
 		if (mfd->mdp.ioctl_handler)

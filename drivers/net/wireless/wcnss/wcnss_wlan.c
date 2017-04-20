@@ -253,7 +253,7 @@ static struct notifier_block wnb = {
 	.notifier_call = wcnss_notif_cb,
 };
 
-#define NVBIN_FILE "wlan/prima/WCNSS_qcom_wlan_nv.bin"
+#define NVBIN_FILE "wlan/prima/WCNSS_qcom_wlan_nv_boot.bin"
 
 /* On SMD channel 4K of maximum data can be transferred, including message
  * header, so NV fragment size as next multiple of 1Kb is 3Kb.
@@ -567,6 +567,7 @@ void wcnss_riva_log_debug_regs(void)
 	void __iomem *ccu_reg;
 	u32 reg = 0;
 
+    pr_err("%s: Enter\n", __func__);
 	ccu_reg = penv->riva_ccu_base + CCU_RIVA_INVALID_ADDR_OFFSET;
 	reg = readl_relaxed(ccu_reg);
 	pr_info_ratelimited("%s: CCU_CCPU_INVALID_ADDR %08x\n", __func__, reg);
@@ -617,6 +618,7 @@ void wcnss_pronto_log_debug_regs(void)
 	void __iomem *reg_addr, *tst_addr, *tst_ctrl_addr;
 	u32 reg = 0, reg2 = 0, reg3 = 0, reg4 = 0;
 
+    pr_err("%s: Enter\n", __func__);
 
 	reg_addr = penv->msm_wcnss_base + PRONTO_PMU_SPARE_OFFSET;
 	reg = readl_relaxed(reg_addr);
@@ -1092,6 +1094,7 @@ void wcnss_log_debug_regs_on_bite(void)
 /* interface to reset wcnss by sending the reset interrupt */
 void wcnss_reset_intr(void)
 {
+    pr_err("%s: Enter\n", __func__);
 	if (wcnss_hardware_type() == WCNSS_PRONTO_HW) {
 		wcnss_pronto_log_debug_regs();
 		wmb();
@@ -1109,6 +1112,7 @@ static int wcnss_create_sysfs(struct device *dev)
 	if (!dev)
 		return -ENODEV;
 
+    pr_err("%s: Enter\n", __func__);
 	ret = device_create_file(dev, &dev_attr_serial_number);
 	if (ret)
 		return ret;
@@ -1190,6 +1194,7 @@ static void wcnss_smd_notify_event(void *data, unsigned int event)
 {
 	int len = 0;
 
+    printk(KERN_ERR"%s\n", __func__);
 	if (penv != data) {
 		pr_err("wcnss: invalid env pointer in smd callback\n");
 		return;
@@ -1340,6 +1345,7 @@ gpio_probe:
 	return rc;
 
 fail:
+    pr_err("%s: error\n", __func__);
 	for (j = WCNSS_WLAN_NUM_GPIOS-1; j >= 0; j--) {
 		int gpio = of_get_gpio(pdev->dev.of_node, i);
 		gpio_free(gpio);
@@ -2041,6 +2047,7 @@ static void wcnssctrl_rx_handler(struct work_struct *worker)
 	int hw_type;
 	unsigned char fw_status = 0;
 
+    pr_err("%s: Enter\n", __func__);
 	len = smd_read_avail(penv->smd_ch);
 	if (len > WCNSS_MAX_FRAME_SIZE) {
 		pr_err("wcnss: frame larger than the allowed size\n");
@@ -2162,6 +2169,7 @@ static void wcnss_send_version_req(struct work_struct *worker)
 	struct smd_msg_hdr smd_msg;
 	int ret = 0;
 
+    printk(KERN_ERR"%s\n", __func__);
 	smd_msg.msg_type = WCNSS_VERSION_REQ;
 	smd_msg.msg_len = sizeof(smd_msg);
 	ret = wcnss_smd_tx(&smd_msg, smd_msg.msg_len);
@@ -2239,7 +2247,11 @@ static void wcnss_nvbin_dnld(void)
 	const struct firmware *nv = NULL;
 	struct device *dev = &penv->pdev->dev;
 
+// 2014.04.11 Add log for crash issue on NV download, CASE Num : 01509265
+    pr_err("wcnss: wcnss_nvbin_dnld \n");
 	down_read(&wcnss_pm_sem);
+// 2014.04.11 Add log for crash issue on NV download, CASE Num : 01509265
+    pr_err("wcnss: request_firmware \n");
 
 	ret = request_firmware(&nv, NVBIN_FILE, dev);
 
@@ -2256,6 +2268,8 @@ static void wcnss_nvbin_dnld(void)
 	nv_blob_size = nv->size - 4;
 
 	total_fragments = TOTALFRAGMENTS(nv_blob_size);
+// 2014.04.11 Add log for crash issue on NV download, CASE Num : 01509265
+    pr_err("wcnss: NV bin size: %d, total_fragments: %d\n", nv_blob_size, total_fragments);
 
 	pr_info("wcnss: NV bin size: %d, total_fragments: %d\n",
 		nv_blob_size, total_fragments);
@@ -2546,6 +2560,7 @@ static ssize_t wcnss_ctrl_write(struct file *fp, const char __user
 			|| WCNSS_MIN_CMD_LEN > count)
 		return -EFAULT;
 
+    pr_err("wcnss: wcnss_ctrl_write()\n");
 	mutex_lock(&penv->ctrl_lock);
 	rc = copy_from_user(buf, user_buffer, count);
 	if (0 == rc)
@@ -2580,6 +2595,7 @@ wcnss_trigger_config(struct platform_device *pdev)
 	int pil_retry = 0;
 	int has_pronto_hw = of_property_read_bool(pdev->dev.of_node,
 							"qcom,has-pronto-hw");
+    pr_err("wcnss: wcnss_trigger_config()\n");
 
 	is_pronto_vt = of_property_read_bool(pdev->dev.of_node,
 							"qcom,is-pronto-vt");
@@ -2658,6 +2674,7 @@ wcnss_trigger_config(struct platform_device *pdev)
 	INIT_WORK(&penv->wcnss_pm_config_work, wcnss_send_pm_config);
 	INIT_WORK(&penv->wcnssctrl_nvbin_dnld_work, wcnss_nvbin_dnld_main);
 	INIT_DELAYED_WORK(&penv->wcnss_pm_qos_del_req, wcnss_pm_qos_enable_pc);
+    printk(KERN_ERR"%s : wake_lock_init() called\n", __func__);
 
 	wake_lock_init(&penv->wcnss_wake_lock, WAKE_LOCK_SUSPEND, "wcnss");
 	/* Add pm_qos request to disable power collapse for DDR */
@@ -2908,6 +2925,7 @@ wcnss_trigger_config(struct platform_device *pdev)
 	do {
 		/* trigger initialization of the WCNSS */
 		penv->pil = subsystem_get(WCNSS_PIL_DEVICE);
+		pr_err("subsystem_get() failed, Ret = %ld\n", (long int)(penv->pil));
 		if (IS_ERR(penv->pil)) {
 			dev_err(&pdev->dev, "Peripheral Loader failed on WCNSS.\n");
 			ret = PTR_ERR(penv->pil);
@@ -2923,6 +2941,7 @@ wcnss_trigger_config(struct platform_device *pdev)
 				&wnb);
 		penv->pil = NULL;
 		goto fail_ioremap2;
+		printk(KERN_ERR"Peripheral Loader failed on WCNSS.\n");
 	}
 	/* Remove pm_qos request */
 	wcnss_disable_pc_remove_req();
@@ -2979,6 +2998,7 @@ static ssize_t wcnss_wlan_read(struct file *fp, char __user
 {
 	int rc = 0;
 
+    pr_err("wcnss: wcnss_wlan_read()\n");
 	if (!penv || !penv->device_opened)
 		return -EFAULT;
 
@@ -3018,6 +3038,7 @@ static ssize_t wcnss_wlan_write(struct file *fp, const char __user
 	int rc = 0;
 	u32 size = 0;
 
+    pr_err("wcnss: wcnss_wlan_write()\n");
 	if (!penv || !penv->device_opened || penv->user_cal_available)
 		return -EFAULT;
 
@@ -3135,6 +3156,7 @@ wcnss_wlan_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 
+    pr_err("wcnss: wcnss_wlan_probe()\n");
 	/* verify we haven't been called more than once */
 	if (penv) {
 		dev_err(&pdev->dev, "cannot handle multiple devices.\n");
@@ -3152,6 +3174,7 @@ wcnss_wlan_probe(struct platform_device *pdev)
 	/* register sysfs entries */
 	ret = wcnss_create_sysfs(&pdev->dev);
 	if (ret) {
+        pr_err("wcnss: error in wcnss_create_sysfs()\n");
 		penv = NULL;
 		return -ENOENT;
 	}
@@ -3222,6 +3245,7 @@ static struct platform_driver wcnss_wlan_driver = {
 
 static int __init wcnss_wlan_init(void)
 {
+    pr_err("wcnss: wcnss_wlan_init()\n");
 	platform_driver_register(&wcnss_wlan_driver);
 	platform_driver_register(&wcnss_wlan_ctrl_driver);
 	platform_driver_register(&wcnss_ctrl_driver);

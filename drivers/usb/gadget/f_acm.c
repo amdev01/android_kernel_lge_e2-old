@@ -187,7 +187,12 @@ static int acm_port_disconnect(struct f_acm *acm)
 /* notification endpoint uses smallish and infrequent fixed-size messages */
 
 #define GS_NOTIFY_INTERVAL_MS		32
+#ifdef CONFIG_USB_G_LGE_ANDROID
+#define GS_NOTIFY_MAXPACKET		16	/* For LG host driver */
+#define GS_DESC_NOTIFY_MAXPACKET	64	/* For acm_hs_notify_desc */
+#else
 #define GS_NOTIFY_MAXPACKET		10	/* notification + 2 bytes */
+#endif
 
 /* interface and class descriptors: */
 
@@ -303,7 +308,11 @@ static struct usb_endpoint_descriptor acm_hs_notify_desc = {
 	.bDescriptorType =	USB_DT_ENDPOINT,
 	.bEndpointAddress =	USB_DIR_IN,
 	.bmAttributes =		USB_ENDPOINT_XFER_INT,
+#ifdef CONFIG_USB_G_LGE_ANDROID
+	.wMaxPacketSize =	cpu_to_le16(GS_DESC_NOTIFY_MAXPACKET),
+#else
 	.wMaxPacketSize =	cpu_to_le16(GS_NOTIFY_MAXPACKET),
+#endif
 	.bInterval =		USB_MS_TO_HS_INTERVAL(GS_NOTIFY_INTERVAL_MS),
 };
 
@@ -382,7 +391,9 @@ static struct usb_string acm_string_defs[] = {
 	[ACM_CTRL_IDX].s = "CDC Abstract Control Model (ACM)",
 	[ACM_DATA_IDX].s = "CDC ACM Data",
 	[ACM_IAD_IDX ].s = "CDC Serial",
-	{  } /* end of list */
+#ifdef CONFIG_USB_G_LGE_ANDROID
+	{  /* ZEROES END LIST */ },
+#endif
 };
 
 static struct usb_gadget_strings acm_string_table = {
@@ -598,15 +609,26 @@ static int acm_cdc_notify(struct f_acm *acm, u8 type, u16 value,
 	struct usb_ep			*ep = acm->notify;
 	struct usb_request		*req;
 	struct usb_cdc_notification	*notify;
+#ifndef CONFIG_USB_G_LGE_ANDROID
 	const unsigned			len = sizeof(*notify) + length;
+#endif
 	void				*buf;
 	int				status;
+
+#ifdef CONFIG_USB_G_LGE_ANDROID
+	unsigned char noti_buf[GS_NOTIFY_MAXPACKET];
+	memset(noti_buf, 0, GS_NOTIFY_MAXPACKET);
+#endif
 
 	req = acm->notify_req;
 	acm->notify_req = NULL;
 	acm->pending = false;
 
+#ifdef CONFIG_USB_G_LGE_ANDROID
+	req->length = GS_NOTIFY_MAXPACKET;
+#else
 	req->length = len;
+#endif
 	notify = req->buf;
 	buf = notify + 1;
 
@@ -616,7 +638,12 @@ static int acm_cdc_notify(struct f_acm *acm, u8 type, u16 value,
 	notify->wValue = cpu_to_le16(value);
 	notify->wIndex = cpu_to_le16(acm->ctrl_id);
 	notify->wLength = cpu_to_le16(length);
+#ifdef CONFIG_USB_G_LGE_ANDROID
+	memcpy(noti_buf, data, length);
+	memcpy(buf, noti_buf, GS_NOTIFY_MAXPACKET);
+#else
 	memcpy(buf, data, length);
+#endif
 
 	/* ep_queue() can complete immediately if it fills the fifo... */
 	spin_unlock(&acm->lock);
@@ -846,6 +873,38 @@ static void acm_free_func(struct usb_function *f)
 	acm_next_free_port--;
 }
 
+#ifdef CONFIG_USB_G_LGE_MULTIPLE_CONFIGURATION
+static int lge_acm_desc_change(struct usb_function *f, bool is_mac)
+{
+	struct usb_interface_descriptor *ss;
+	struct usb_interface_descriptor *hs;
+	struct usb_interface_descriptor *fs;
+
+	if (f->ss_descriptors)
+		ss = ((struct usb_interface_descriptor *)f->ss_descriptors[1]);
+	hs = ((struct usb_interface_descriptor *)f->hs_descriptors[1]);
+	fs = ((struct usb_interface_descriptor *)f->fs_descriptors[1]);
+
+	if (is_mac == true) {
+		if (f->ss_descriptors)
+			ss->bInterfaceClass = USB_CLASS_VENDOR_SPEC;
+		hs->bInterfaceClass = USB_CLASS_VENDOR_SPEC;
+		fs->bInterfaceClass = USB_CLASS_VENDOR_SPEC;
+		pr_info("MAC ACM bInterfaceClass change to %u\n",
+				USB_CLASS_VENDOR_SPEC);
+	} else {
+		if (f->ss_descriptors)
+			ss->bInterfaceClass = USB_CLASS_COMM;
+		hs->bInterfaceClass = USB_CLASS_COMM;
+		fs->bInterfaceClass = USB_CLASS_COMM;
+		pr_info("WIN/LINUX ACM bInterfaceClass change to %u\n",
+				USB_CLASS_COMM);
+	}
+
+	return 0;
+}
+#endif
+
 static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 {
 	struct f_serial_opts *opts;
@@ -879,6 +938,10 @@ static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 	acm->port_num = opts->port_num;
 	acm->port.func.unbind = acm_unbind;
 	acm->port.func.free_func = acm_free_func;
+
+#ifdef CONFIG_USB_G_LGE_MULTIPLE_CONFIGURATION
+	acm->port.func.desc_change = lge_acm_desc_change;
+#endif
 
 	return &acm->port.func;
 }

@@ -34,6 +34,7 @@
 #include "msm.h"
 #include "msm_buf_mgr.h"
 
+/*#define CONFIG_MSM_ISP_DBG*/
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 

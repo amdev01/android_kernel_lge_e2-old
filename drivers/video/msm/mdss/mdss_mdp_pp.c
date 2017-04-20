@@ -22,7 +22,17 @@
 #include <linux/delay.h>
 #include <linux/msm-bus.h>
 #include <linux/msm-bus-board.h>
+#if defined(CONFIG_LCD_KCAL)
+#include <mach/board_lge.h>
+extern int g_kcal_r;
+extern int g_kcal_g;
+extern int g_kcal_b;
+extern struct kcal_data kcal_value;
+#endif
 
+#ifdef CONFIG_MACH_LGE
+int put_lut_table(int num,uint32_t value);
+#endif
 struct mdp_csc_cfg mdp_csc_convert[MDSS_MDP_MAX_CSC] = {
 	[MDSS_MDP_CSC_RGB2RGB] = {
 		0,
@@ -347,6 +357,84 @@ struct mdss_pp_res_type {
 	/* physical info */
 	struct pp_hist_col_info *dspp_hist;
 };
+#ifdef CONFIG_MACH_LGE
+uint32_t igc_Table_LUT[256]={
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+	0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
+	0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
+	0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+	0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F,
+	0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
+	0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F,
+	0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+	0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,
+	0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+	0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+	0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
+	0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF,
+	0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF,
+	0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF,
+};
+
+uint32_t igc_Table_RGB[256]={
+	4080	,		4064	,		4048	,		4032	,		4016	,		4000	,		3984	,		3968	,		3952	,		3936
+		,		3920	,		3904	,
+	3888	,		3872	,		3856	,		3840	,		3824	,		3808	,		3792	,		3776	,		3760	,		3744
+		,		3728	,		3712	,
+	3696	,		3680	,		3664	,		3648	,		3632	,		3616	,		3600	,		3584	,		3568	,		3552
+		,		3536	,		3520	,
+	3504	,		3488	,		3472	,		3456	,		3440	,		3424	,		3408	,		3392	,		3376	,		3360
+		,		3344	,		3328	,
+	3312	,		3296	,		3280	,		3264	,		3248	,		3232	,		3216	,		3200	,		3184	,		3168
+		,		3152	,		3136	,
+	3120	,		3104	,		3088	,		3072	,		3056	,		3040	,		3024	,		3008	,		2992	,		2976
+		,		2960	,		2944	,
+	2928	,		2912	,		2896	,		2880	,		2864	,		2848	,		2832	,		2816	,		2800	,		2784
+		,		2768	,		2752	,
+	2736	,		2720	,		2704	,		2688	,		2672	,		2656	,		2640	,		2624	,		2608	,		2592
+		,		2576	,		2560	,
+	2544	,		2528	,		2512	,		2496	,		2480	,		2464	,		2448	,		2432	,		2416	,		2400
+		,		2384	,		2368	,
+	2352	,		2336	,		2320	,		2304	,		2288	,		2272	,		2256	,		2240	,		2224	,		2208
+		,		2192	,		2176	,
+	2160	,		2144	,		2128	,		2112	,		2096	,		2080	,		2064	,		2048	,		2032	,		2016
+		,		2000	,		1984	,
+	1968	,		1952	,		1936	,		1920	,		1904	,		1888	,		1872	,		1856	,		1840	,		1824
+		,		1808	,		1792	,
+	1776	,		1760	,		1744	,		1728	,		1712	,		1696	,		1680	,		1664	,		1648	,		1632
+		,		1616	,		1600	,
+	1584	,		1568	,		1552	,		1536	,		1520	,		1504	,		1488	,		1472	,		1456	,		1440
+		,		1424	,		1408	,
+	1392	,		1376	,		1360	,		1344	,		1328	,		1312	,		1296	,		1280	,		1264	,		1248
+		,		1232	,		1216	,
+	1200	,		1184	,		1168	,		1152	,		1136	,		1120	,		1104	,		1088	,		1072	,		1056
+		,		1040	,		1024	,
+	1008	,		992	,		976	,		960	,		944	,		928	,		912	,		896	,		880	,		864
+		,		848	,		832	,
+	816	,		800	,		784	,		768	,		752	,		736	,		720	,		704	,		688	,		672
+		,		656	,		640	,
+	624	,		608	,		592	,		576	,		560	,		544	,		528	,		512	,		496	,		480
+		,		464	,		448	,
+	432	,		416	,		400	,		384	,		368	,		352	,		336	,		320	,		304	,		288
+		,		272	,		256	,
+	240	,		224	,		208	,		192	,		176	,		160	,		144	,		128	,		112	,		96
+		,		80	,		64	,
+	48	,		32	,		16	,		0
+};
+int igc_c0_c1[256]={0,};
+int igc_c2[256]={0,};
+
+int put_lut_table(int num,uint32_t value)
+{
+	if(value < 0 || value > 255)
+		value=0;
+	igc_Table_LUT[num]=value;
+	mdss_dsi_panel_invert(0);
+	pr_info("put_lut_table: num=%d, value=%x\n",num,value);
+	return 0;
+}
+#endif
 
 static DEFINE_MUTEX(mdss_pp_mutex);
 static struct mdss_pp_res_type *mdss_pp_res;
@@ -1994,6 +2082,10 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 			mdss_pp_res->gamut_disp_cfg[disp_num].flags |=
 				MDP_PP_OPS_WRITE;
 	}
+#if defined(CONFIG_LCD_KCAL)
+	if (disp_num == 0)
+		pp_sts.pgc_sts |= PP_STS_ENABLE;
+#endif
 	if (pp_sts.pgc_sts & PP_STS_ENABLE) {
 		flags |= PP_FLAGS_DIRTY_PGC;
 		if (!(mdss_pp_res->pgc_disp_cfg[disp_num].flags
@@ -2047,6 +2139,152 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 
 	return 0;
 }
+
+#if defined(CONFIG_LCD_KCAL)
+static struct mdp_ar_gc_lut_data test_r[GC_LUT_SEGMENTS] =
+{
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000002, 0x000000FF, 0x00000000},
+	{0x00000FFF, 0x00000000, 0x00007F80},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000}
+};
+
+static struct mdp_ar_gc_lut_data test_g[GC_LUT_SEGMENTS] =
+{
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000002, 0x000000FF, 0x00000000},
+	{0x00000FFF, 0x00000000, 0x00007F80},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000}
+};
+
+static struct mdp_ar_gc_lut_data test_b[GC_LUT_SEGMENTS] =
+{
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000002, 0x000000FF, 0x00000000},
+	{0x00000FFF, 0x00000000, 0x00007F80},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000},
+	{0x00000000, 0x00000000, 0x00000000}
+};
+
+void mdss_mdp_pp_argc(void)
+{
+	int disp_num = 0;
+	u32 tbl_size;
+
+	struct mdp_ar_gc_lut_data *r_data;
+	struct mdp_ar_gc_lut_data *g_data;
+	struct mdp_ar_gc_lut_data *b_data;
+	struct mdp_pgc_lut_data *pgc_config;
+
+	r_data = &mdss_pp_res->gc_lut_r[disp_num][0];
+	g_data = &mdss_pp_res->gc_lut_g[disp_num][0];
+	b_data = &mdss_pp_res->gc_lut_b[disp_num][0];
+
+	tbl_size = GC_LUT_SEGMENTS * sizeof(struct mdp_ar_gc_lut_data);
+	memcpy(r_data, test_r, tbl_size);
+	memcpy(g_data, test_g, tbl_size);
+	memcpy(b_data, test_b, tbl_size);
+
+	pgc_config = &mdss_pp_res->pgc_disp_cfg[disp_num];
+
+	pgc_config->r_data =
+		&mdss_pp_res->gc_lut_r[disp_num][0];
+	pgc_config->g_data =
+		&mdss_pp_res->gc_lut_g[disp_num][0];
+	pgc_config->b_data =
+		&mdss_pp_res->gc_lut_b[disp_num][0];
+
+	pgc_config->flags |= MDP_PP_OPS_WRITE;
+	pgc_config->flags |= MDP_PP_OPS_ENABLE;
+
+	pr_info(">>>>> %s \n", __func__);
+}
+
+#define NUM_QLUT 256
+#define MAX_KCAL_V (NUM_QLUT-1)
+
+#define SCALED_BY_KCAL(rgb, kcal) \
+	(((((unsigned int)(rgb) * (unsigned int)(kcal)) << 10) / \
+	  (unsigned int)MAX_KCAL_V) >> 10)
+
+void mdss_mdp_pp_argc_kcal(int kr, int kg, int kb)//struct mdss_mdp_ctl *ctl,
+{
+	int i;
+	int disp_num = 0;
+	struct mdp_pgc_lut_data *pgc_config;
+
+	for (i = 0; i < GC_LUT_SEGMENTS; i++) {
+		mdss_pp_res->gc_lut_r[disp_num][i].slope =
+			SCALED_BY_KCAL(test_r[i].slope, kr);
+		mdss_pp_res->gc_lut_r[disp_num][i].offset =
+			SCALED_BY_KCAL(test_r[i].offset, kr);
+
+		mdss_pp_res->gc_lut_g[disp_num][i].slope =
+			SCALED_BY_KCAL(test_g[i].slope, kg);
+		mdss_pp_res->gc_lut_g[disp_num][i].offset =
+			SCALED_BY_KCAL(test_g[i].offset, kg);
+
+		mdss_pp_res->gc_lut_b[disp_num][i].slope =
+			SCALED_BY_KCAL(test_b[i].slope, kb);
+		mdss_pp_res->gc_lut_b[disp_num][i].offset =
+			SCALED_BY_KCAL(test_b[i].offset, kb);
+	}
+	pgc_config = &mdss_pp_res->pgc_disp_cfg[disp_num];
+	pgc_config->flags |= MDP_PP_OPS_WRITE;
+	pgc_config->flags |= MDP_PP_OPS_ENABLE;
+	//mdss_mdp_pp_setup(ctl);
+	mdss_pp_res->pp_disp_flags[disp_num] |= PP_FLAGS_DIRTY_PGC;
+
+	pr_info(">>>>> %s \n", __func__);
+}
+
+int update_preset_lcdc_lut(void)
+{
+	int ret = 0;
+
+	printk("update_preset_lcdc_lut red=[%d], green=[%d], blue=[%d]\n", g_kcal_r, g_kcal_g, g_kcal_b);
+	mdss_mdp_pp_argc_kcal(g_kcal_r,g_kcal_g,g_kcal_b);
+
+	if (ret)
+		pr_err("%s: failed to set lut! %d\n", __func__, ret);
+	return ret;
+}
+#endif
 
 int mdss_mdp_pp_init(struct device *dev)
 {
@@ -2118,6 +2356,12 @@ int mdss_mdp_pp_init(struct device *dev)
 			init_completion(&vig[i].pp_res.hist.first_kick);
 		}
 	}
+#if defined(CONFIG_LCD_KCAL)
+	if (!ret) {
+		mdss_mdp_pp_argc();
+		update_preset_lcdc_lut();
+	}
+#endif
 exit_err:
 	mutex_unlock(&mdss_pp_mutex);
 	return ret;
@@ -2633,6 +2877,63 @@ pcc_config_exit:
 	mutex_unlock(&mdss_pp_mutex);
 	return ret;
 }
+
+#ifdef CONFIG_MACH_LGE
+int mdss_dsi_panel_invert(u32 enable)
+{
+	int i;
+	int disp_num = 0;
+	struct mdss_mdp_ctl *ctl;
+	struct mdss_mdp_ctl *ctl_d = NULL;
+	struct mdss_data_type *mdata;
+	struct mdp_igc_lut_data *igc_data;
+
+	mdata = mdss_mdp_get_mdata();
+	for (i = 0; i < mdata->nctl; i++) {
+		ctl = mdata->ctl_off + i;
+		if ((ctl->power_state == MDSS_PANEL_POWER_ON) && (ctl->mfd) &&
+			(ctl->mfd->index == 0)) {
+			ctl_d = ctl;
+			break;
+		}
+	}
+
+	igc_data = &mdss_pp_res->igc_disp_cfg[disp_num];
+	igc_data->c0_c1_data = &mdss_pp_res->igc_lut_c0c1[disp_num][0];
+	igc_data->c2_data = &mdss_pp_res->igc_lut_c2[disp_num][0];
+	igc_data->block = MDP_LOGICAL_BLOCK_DISP_0;
+	igc_data->len = 256;
+
+
+	if(ctl_d && enable)
+	{
+		igc_data->ops = MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE;
+		for(i=0; i<256 ; i++){
+			igc_c0_c1[i]=(igc_Table_RGB[i]&0xFFF)|((igc_Table_RGB[i]&0xFFF))<<16;
+			igc_c2[i]=igc_Table_RGB[i];
+		}
+		igc_data->c0_c1_data=&igc_c0_c1[0];
+		igc_data->c2_data=&igc_c2[0];
+
+	}
+	else if(ctl_d && !enable)
+	{
+		igc_data->ops = MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE;
+		for(i=0; i<256 ; i++){
+			igc_c0_c1[i]=(((igc_Table_LUT[i]*16))&0xFFF)|((((igc_Table_LUT[i]*16))&0xFFF))<<16;
+			igc_c2[i]=((igc_Table_LUT[i]*16));
+		}
+		igc_data->c0_c1_data=&igc_c0_c1[0];
+		igc_data->c2_data=&igc_c2[0];
+	}
+	else
+	{
+		pr_info("!!!!!!!!!!!!!!!!! null !!!!!!!!!!!!\n");
+	}
+	mdss_pp_res->pp_disp_flags[disp_num] |= PP_FLAGS_DIRTY_IGC;
+	return 0;
+}
+#endif
 
 static void pp_read_igc_lut_cached(struct mdp_igc_lut_data *cfg)
 {

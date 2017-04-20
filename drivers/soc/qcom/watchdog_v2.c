@@ -30,6 +30,10 @@
 #include <soc/qcom/memory_dump.h>
 #include <soc/qcom/watchdog.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
+
 #define MODULE_NAME "msm_watchdog"
 #define WDT0_ACCSCSSNBARK_INT 0
 #define TCSR_WDT_CFG	0x30
@@ -99,6 +103,20 @@ module_param(WDT_HZ, long, 0);
  */
 static int ipi_opt_en;
 module_param(ipi_opt_en, int, 0);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+static void __iomem *msm_timer0_base;
+
+void __iomem *wdt_timer_get_timer0_base(void)
+{
+        return msm_timer0_base;
+}
+
+static void wdt_timer_set_timer0_base(void __iomem * iomem)
+{
+        msm_timer0_base = iomem;
+}
+#endif
 
 static void pet_watchdog_work(struct work_struct *work);
 static void init_watchdog_work(struct work_struct *work);
@@ -412,6 +430,11 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 		wdog_dd->last_pet, nanosec_rem / 1000);
 	if (wdog_dd->do_ipi_ping)
 		dump_cpu_alive_mask(wdog_dd);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	lge_set_restart_reason(LGE_RB_MAGIC | LGE_ERR_TZ | LGE_ERR_TZ_WDT_BARK);
+#endif
+
 	msm_trigger_wdog_bite();
 	panic("Failed to cause a watchdog bite! - Falling back to kernel panic!");
 	return IRQ_HANDLED;
@@ -694,6 +717,11 @@ static int msm_watchdog_probe(struct platform_device *pdev)
 	INIT_WORK(&wdog_dd->init_dogwork_struct, init_watchdog_work);
 	INIT_DELAYED_WORK(&wdog_dd->dogwork_struct, pet_watchdog_work);
 	queue_work(wdog_wq, &wdog_dd->init_dogwork_struct);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+        wdt_timer_set_timer0_base(wdog_dd->base);
+#endif
+
 	return 0;
 err:
 	destroy_workqueue(wdog_wq);

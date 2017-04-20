@@ -36,7 +36,6 @@
 #include "msm_iommu_hw-v1.h"
 #include "msm_iommu_priv.h"
 #include <linux/qcom_iommu.h>
-#include <trace/events/kmem.h>
 
 /* bitmap of the page sizes currently supported */
 #define MSM_IOMMU_PGSIZES	(SZ_4K | SZ_64K | SZ_1M | SZ_16M)
@@ -610,9 +609,6 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 		flush_va = pa_list;
 	}
 
-	trace_iommu_sec_ptbl_map_range_start(map.info.id, map.info.ctx_id, va,
-								pa, len);
-
 	/*
 	 * Ensure that the buffer is in RAM by the time it gets to TZ
 	 */
@@ -621,10 +617,6 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 
 	ret = msm_iommu_sec_map2(&map);
 	kfree(pa_list);
-
-	trace_iommu_sec_ptbl_map_range_end(map.info.id, map.info.ctx_id, va, pa,
-									len);
-
 	return ret;
 }
 

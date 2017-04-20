@@ -713,7 +713,8 @@ static long msm_vfe40_reset_hardware(struct vfe_device *vfe_dev,
 
 	if (blocking_call) {
 		rc = wait_for_completion_timeout(
-			&vfe_dev->reset_complete, msecs_to_jiffies(50));
+			&vfe_dev->reset_complete, msecs_to_jiffies(100)); /*                                                                                                                           */
+
 	}
 	return rc;
 }
