@@ -442,6 +442,15 @@ static int msm_pinctrl_dt_parse_pins(struct device_node *dev_node,
 
 	dev = dd->dev;
 	for_each_child_of_node(dev_node, pgrp_np) {
+#ifdef CONFIG_MACH_LGE
+                /* check status=okay for pinctrl child node */
+                if (!of_device_is_available(pgrp_np))
+                        continue;
+
+                if (!of_device_is_available_revision(pgrp_np))
+                        continue;
+#endif
+
 		if (!of_find_property(pgrp_np, "qcom,pins", NULL))
 			continue;
 		if (of_find_property(pgrp_np, "qcom,pin-func", NULL))
@@ -469,6 +478,15 @@ static int msm_pinctrl_dt_parse_pins(struct device_node *dev_node,
 	 * function
 	 */
 	for_each_child_of_node(dev_node, pgrp_np) {
+#ifdef CONFIG_MACH_LGE
+                /* check status=okay for pinctrl child node */
+                if (!of_device_is_available(pgrp_np))
+                        continue;
+
+                if (!of_device_is_available_revision(pgrp_np))
+                        continue;
+#endif
+
 		if (!of_find_property(pgrp_np, "qcom,pins", NULL))
 			continue;
 		curr_grp = pin_grps + grp_index;
