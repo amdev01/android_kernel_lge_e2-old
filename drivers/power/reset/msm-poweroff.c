@@ -32,6 +32,11 @@
 #include <soc/qcom/restart.h>
 #include <soc/qcom/watchdog.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <mach/lge_handle_panic.h>
+#endif
+#include <mach/board_lge.h>
+
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -60,7 +65,11 @@ static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
 static int dload_set(const char *val, struct kernel_param *kp);
+#ifdef CONFIG_MACH_MSM8916_E2N_GLOBAL_COM
+static int download_mode = 0;
+#else
 static int download_mode = 1;
+#endif
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 static int panic_prep_restart(struct notifier_block *this,
@@ -116,6 +125,7 @@ static bool get_dload_mode(void)
 	return dload_mode_enabled;
 }
 
+#ifndef CONFIG_LGE_HANDLE_PANIC
 static void enable_emergency_dload_mode(void)
 {
 	int ret;
@@ -140,6 +150,7 @@ static void enable_emergency_dload_mode(void)
 	if (ret)
 		pr_err("Failed to set secure EDLOAD mode: %d\n", ret);
 }
+#endif
 
 static int dload_set(const char *val, struct kernel_param *kp)
 {
@@ -156,6 +167,11 @@ static int dload_set(const char *val, struct kernel_param *kp)
 		download_mode = old_val;
 		return -EINVAL;
 	}
+
+#ifdef CONFIG_LAF_G_DRIVER
+        if (lge_get_laf_mode() == LGE_LAF_MODE_LAF)
+                download_mode = 1;
+#endif
 
 	set_dload_mode(download_mode);
 
@@ -215,11 +231,19 @@ static void msm_restart_prepare(const char *cmd)
 	 */
 
 	set_dload_mode(download_mode &&
-			(in_panic || restart_mode == RESTART_DLOAD));
+			(in_panic 
+#ifndef CONFIG_LAF_G_DRIVER
+			|| restart_mode == RESTART_DLOAD
+#endif
+			));
 #endif
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
+#ifdef CONFIG_MACH_LGE
+        if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0') || in_panic || (restart_mode == RESTART_DLOAD))
+#else
 	if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0'))
+#endif
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
@@ -229,6 +253,8 @@ static void msm_restart_prepare(const char *cmd)
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			__raw_writel(0x77665502, restart_reason);
+		} else if (!strncmp(cmd, "fota", 4)) {
+			__raw_writel(0x77665566, restart_reason);
 		} else if (!strcmp(cmd, "rtc")) {
 			__raw_writel(0x77665503, restart_reason);
 		} else if (!strncmp(cmd, "oem-", 4)) {
@@ -238,13 +264,32 @@ static void msm_restart_prepare(const char *cmd)
 			if (!ret)
 				__raw_writel(0x6f656d00 | (code & 0xff),
 					     restart_reason);
+#ifndef CONFIG_LGE_HANDLE_PANIC
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+#endif
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
 	}
+#ifdef CONFIG_LGE_HANDLE_PANIC
+        else {
+             __raw_writel(0x776655ff, restart_reason);
+        }
 
+#ifdef CONFIG_LAF_G_DRIVER
+        if (restart_mode == RESTART_DLOAD)
+                lge_set_restart_reason(LAF_DLOAD_MODE);
+#endif
+
+        if (in_panic)
+                lge_set_panic_reason();
+#endif
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	if (in_panic)
+		lge_set_panic_reason();
+#endif
 	flush_cache_all();
 
 	/*outer_flush_all is not supported by 64bit kernel*/
@@ -332,6 +377,11 @@ static int msm_restart_probe(struct platform_device *pdev)
 	struct resource *mem;
 	struct device_node *np;
 	int ret = 0;
+
+#ifdef CONFIG_LAF_G_DRIVER
+        if (lge_get_laf_mode() == LGE_LAF_MODE_LAF)
+                download_mode = 1;
+#endif
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 	if (scm_is_call_available(SCM_SVC_BOOT, SCM_DLOAD_CMD) > 0)
