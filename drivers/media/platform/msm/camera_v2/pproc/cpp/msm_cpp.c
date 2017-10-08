@@ -1615,7 +1615,7 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 			&buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_debug("%s: error getting buffer rc:%d\n",
+			pr_err("%s: error getting buffer rc:%d\n",
 				 __func__, rc);
 			goto frame_msg_err;
 		}
@@ -1650,7 +1650,7 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 			&dup_buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_debug("%s: error getting buffer rc:%d\n",
+			pr_err("%s: error getting buffer rc:%d\n",
 				__func__, rc);
 			goto phyaddr_err;
 		}
@@ -1949,6 +1949,8 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_CPP_CFG:
 		CPP_DBG("VIDIOC_MSM_CPP_CFG\n");
 		rc = msm_cpp_cfg(cpp_dev, ioctl_ptr);
+		if (rc < 0)
+			pr_err("%s: error in cpp_cfg\n", __func__); /*                                                        */
 		break;
 	case VIDIOC_MSM_CPP_FLUSH_QUEUE:
 		CPP_DBG("VIDIOC_MSM_CPP_FLUSH_QUEUE\n");

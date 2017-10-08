@@ -732,8 +732,8 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 
 	if (timeout < 0) {
 		mutex_unlock(&session->lock);
-		pr_err("%s : timeout cannot be negative Line %d\n",
-				__func__, __LINE__);
+                if(event->id != MSM_CAMERA_DEL_SESSION)  /*                                                                       */
+		    pr_err("%s : timeout cannot be negative Line %d\n",__func__, __LINE__);
 		return rc;
 	}
 
@@ -746,16 +746,28 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 		if (!rc) {
 			pr_err("%s: Timed out\n", __func__);
 			msm_print_event_error(event);
+			/*                                                                     */
 			mutex_unlock(&session->lock);
-			return -ETIMEDOUT;
+			pr_err("%s: %d ===== Camera Recovery Start! ===== \n", __func__, __LINE__);
+			dump_stack();
+			send_sig(SIGKILL, current, 0);
+			return -ETIMEDOUT;			
+//			rc = -ETIMEDOUT;
+                     /*                                                                     */
 		} else {
 			pr_err("%s: Error: No timeout but list empty!",
 					__func__);
 			msm_print_event_error(event);
 			mutex_unlock(&session->lock);
+			/*                                                                     */
+			pr_err("%s: %d ===== Camera Recovery Start! ===== \n", __func__,__LINE__);
+			dump_stack();
+			send_sig(SIGKILL, current, 0);		
+			/*                                                                     */
 			return -EINVAL;
 		}
 	}
+
 
 	cmd = msm_dequeue(&cmd_ack->command_q,
 		struct msm_command, list);
@@ -855,7 +867,7 @@ static int msm_open(struct file *filep)
 	spin_lock_irqsave(&msm_eventq_lock, flags);
 	msm_eventq = filep->private_data;
 	spin_unlock_irqrestore(&msm_eventq_lock, flags);
-
+       pr_err("%s: rc = %d\n", __func__, rc);
 	return rc;
 }
 

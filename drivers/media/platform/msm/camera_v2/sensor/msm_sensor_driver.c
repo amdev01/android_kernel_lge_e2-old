@@ -20,7 +20,7 @@
 
 /* Logging macro */
 #undef CDBG
-#define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 #define SENSOR_MAX_MOUNTANGLE (360)
 
@@ -1126,7 +1126,7 @@ static int32_t msm_sensor_driver_parse(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int32_t                   rc = 0;
 
-	CDBG("Enter");
+	CDBG("%s: Enter", __func__);
 	/* Validate input parameters */
 
 
@@ -1308,7 +1308,7 @@ static int __init msm_sensor_driver_init(void)
 {
 	int32_t rc = 0;
 
-	CDBG("Enter");
+	CDBG("%s: Enter", __func__);
 	rc = platform_driver_probe(&msm_sensor_platform_driver,
 		msm_sensor_driver_platform_probe);
 	if (!rc) {

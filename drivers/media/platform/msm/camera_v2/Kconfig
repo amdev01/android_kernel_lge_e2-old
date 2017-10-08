@@ -111,6 +111,15 @@ config MSM_ISPIF_V1
           of any CID of MSM_CSI22_HEADER can be routed to of pixel
           or raw data interface in VFE.
 
+
+config HI544
+    bool "Sensor hi544 (Hynix 5MP)"
+    depends on MSMB_CAMERA
+    ---help---
+        Support for HI544 sensor driver.
+        This is a Hynix 5MP Bayer Sensor with autofocus.
+        Say Y if the platform uses HI544 sensor.
+        
 config IMX134
 	bool "Sensor IMX134 (BAYER 8M)"
 	depends on MSMB_CAMERA
@@ -164,6 +173,16 @@ config MT9M114
 		and snapshot. The preview and snapshot resolution shall be
 		1280 * 270. It does not support auto focus. It supports
 		few special effects like saturation.
+
+config HI707
+	bool "Sensor HI707 (YUV VGA)"
+	depends on MSMB_CAMERA
+	---help---
+		HI707 is Aptina YUV sensor. It supports VGA preview
+		and snapshot. The preview and snapshot resolution shall be
+		640 * 480. It does not support auto focus. It supports
+		few special effects like saturation.
+
 config OV5645
 	bool "Sensor OV5645 (YUV 5.0MP)"
 	depends on MSMB_CAMERA
@@ -264,3 +283,14 @@ config MSM_FD
 	 depends on MSMB_CAMERA
 	 ---help---
 	    Enables support for the MSM FD face detection engine.
+config BACKLIGHT_RT8542
+	tristate "Backlight driver for rt8542 visualisation device"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  To compile this driver as a module, choose M here: the module will be
+	  called rt8542 driver.
+
+config BL_CURVE
+	bool "Enable support for BL Curve"
+	help
+	  Support to dynamically modify the bl map

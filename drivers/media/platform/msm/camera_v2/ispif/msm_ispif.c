@@ -1019,10 +1019,18 @@ static void ispif_process_irq(struct ispif_device *ispif,
 	if (out[vfe_id].ispifIrqStatus0 &
 			ISPIF_IRQ_STATUS_PIX_SOF_MASK) {
 		ispif->sof_count[vfe_id].sof_cnt[PIX0]++;
+/*                                                                  */
+		if(ispif->sof_count[vfe_id].sof_cnt[PIX0] <10)
+			pr_err(" %s : %d \n",__func__,ispif->sof_count[vfe_id].sof_cnt[PIX0]);
+/*                                                                  */
 	}
 	if (out[vfe_id].ispifIrqStatus0 &
 			ISPIF_IRQ_STATUS_RDI0_SOF_MASK) {
 		ispif->sof_count[vfe_id].sof_cnt[RDI0]++;
+/*                                                                  */
+		if(ispif->sof_count[vfe_id].sof_cnt[RDI0] <10)
+			pr_err(" %s : RDI0 %d \n",__func__,ispif->sof_count[vfe_id].sof_cnt[PIX0]);
+/*                                                                  */
 	}
 	if (out[vfe_id].ispifIrqStatus1 &
 			ISPIF_IRQ_STATUS_RDI1_SOF_MASK) {

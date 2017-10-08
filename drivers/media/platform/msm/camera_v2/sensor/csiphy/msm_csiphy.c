@@ -36,6 +36,7 @@
 #define MSM_CSIPHY_DRV_NAME                      "msm_csiphy"
 #define CLK_LANE_OFFSET                             1
 #define NUM_LANES_OFFSET                            4
+#define CONFIG_MSMB_CAMERA_DEBUG
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -175,6 +176,18 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 		msm_camera_io_w(csiphy_params->settle_cnt,
 			csiphybase + csiphy_dev->ctrl_reg->csiphy_reg.
 			mipi_csiphy_lnn_cfg3_addr + 0x40*j);
+
+		//                                                                                          
+		#if defined (CONFIG_HI544) || defined (CONFIG_HI841)
+		if(csiphy_dev->pdev->id == 0){	//main camera
+			if(csiphy_dev->hw_version >= CSIPHY_VERSION_V30) {
+				msm_camera_io_w(0xC, csiphybase + csiphy_dev->ctrl_reg->csiphy_reg.
+				mipi_csiphy_lnn_cfg4_addr + 0x40*j);
+			}
+		}
+		#endif
+		//                                                                                          
+
 		msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_reg.
 			mipi_csiphy_interrupt_mask_val, csiphybase +
 			csiphy_dev->ctrl_reg->csiphy_reg.
@@ -220,6 +233,7 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 		j++;
 		lane_mask >>= 1;
 	}
+
 	return rc;
 }
 

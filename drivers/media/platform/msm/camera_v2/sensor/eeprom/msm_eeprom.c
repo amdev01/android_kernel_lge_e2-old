@@ -455,6 +455,82 @@ static struct v4l2_subdev_ops msm_eeprom_subdev_ops = {
 	.core = &msm_eeprom_subdev_core_ops,
 };
 
+//                                                                      
+#ifdef CONFIG_HI544
+static uint32_t msm_eeprom_checksum(struct msm_eeprom_ctrl_t *e_ctrl)
+{
+	int CheckSum = 0;
+	int DataSum = 0;
+	int i = 0;
+	uint32_t rc_supported = 0x00;
+
+	//HI544 (LGIT) EEPROM MAP
+	const int AWB_5100K_START_ADDR   = 0x0000;
+	const int AWB_5100K_END_ADDR     = 0x0005;
+	const int AWB_5100K_CHECKSUM_MSB = 0x0006;
+	const int AWB_5100K_CHECKSUM_LSB = 0x0007;
+
+	const int LSC_5100K_START_ADDR   = 0x000C;
+	const int LSC_5100K_END_ADDR     = 0x037F;
+	const int LSC_5100K_CHECKSUM_MSB = 0x0380;
+	const int LSC_5100K_CHECKSUM_LSB = 0x0381;
+
+	CDBG(">> %s START\n", __func__);
+
+	/////////////////////////////////////////////////////////////////////////
+	// 1. AWB CheckSum
+	/////////////////////////////////////////////////////////////////////////
+    CheckSum = (e_ctrl->cal_data.mapdata[AWB_5100K_CHECKSUM_MSB] << 8)
+    		  + e_ctrl->cal_data.mapdata[AWB_5100K_CHECKSUM_LSB];
+    DataSum = 0;
+
+    for( i = AWB_5100K_START_ADDR; i <= AWB_5100K_END_ADDR; i++ ) {
+		DataSum  += e_ctrl->cal_data.mapdata[i];
+     }
+
+	DataSum &= 0x0000FFFF;
+
+	CDBG("[CHECK] AWB CheckSum: 0x%04x, DataSum: 0x%04x\n", CheckSum, DataSum);
+	if( CheckSum != DataSum ) {
+        pr_err("%s HI544 EEPROM AWB CheckSum error for 5100K!\n", __func__);
+    } else {
+        CDBG("%s HI544 EEPROM AWB CheckSum for 5100K - OK\n", __func__);
+        rc_supported |= 0x10; //AWB bit On
+    }
+
+	/////////////////////////////////////////////////////////////////////////
+	// 2. LSC CheckSum
+	/////////////////////////////////////////////////////////////////////////
+    CheckSum = (e_ctrl->cal_data.mapdata[LSC_5100K_CHECKSUM_MSB] << 8)
+    		  + e_ctrl->cal_data.mapdata[LSC_5100K_CHECKSUM_LSB];
+    DataSum = 0;
+
+    for( i = LSC_5100K_START_ADDR; i <= LSC_5100K_END_ADDR; i++ ) {
+		DataSum  += e_ctrl->cal_data.mapdata[i];
+    }
+
+	DataSum &= 0x0000FFFF;
+
+	CDBG("[CHECK] LSC CheckSum: 0x%04x, DataSum: 0x%04x\n", CheckSum, DataSum);
+	if (CheckSum == 0) {
+		//LSC Data does NOT exist
+        pr_err("%s HI544 EEPROM LSC NOT Supported for 5100K!\n", __func__);
+	}
+	else if( CheckSum != DataSum ) {
+		//LSC data exist, But CheckSum Failed!
+        pr_err("%s HI544 EEPROM LSC CheckSum error for 5100K!\n", __func__);
+    } else {
+    	//e_ctrl->is_supported |= 0x20; //LSC bit On
+        CDBG("%s HI544 EEPROM LSC CheckSum for 5100K - OK\n", __func__);
+        rc_supported |= 0x20; //LSC bit On
+    }
+
+    CDBG("<< %s END (rc_supported: 0x%X) @Line:%d\n", __func__, rc_supported, __LINE__);
+	return rc_supported;
+}
+#endif
+//                                                                      
+
 static int msm_eeprom_i2c_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
 {
@@ -1146,6 +1222,14 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 
 	e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data);
 
+	//                                                                      
+	#ifdef CONFIG_HI544
+	CDBG("[CHECK] [BEFORE] e_ctrl->is_supported: 0x%X", e_ctrl->is_supported);
+	e_ctrl->is_supported |= msm_eeprom_checksum(e_ctrl);
+	CDBG("[CHECK] [AFTER]  e_ctrl->is_supported: 0x%X", e_ctrl->is_supported);
+	#endif
+	//                                                                      
+
 	rc = msm_camera_power_down(power_info, e_ctrl->eeprom_device_type,
 		&e_ctrl->i2c_client);
 	if (rc) {
@@ -1173,6 +1257,8 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 #endif
 
 	e_ctrl->is_supported = (e_ctrl->is_supported << 1) | 1;
+	CDBG("[CHECK] [FINAL]  e_ctrl->is_supported: 0x%X", e_ctrl->is_supported);
+
 	CDBG("%s X\n", __func__);
 	return rc;
 
