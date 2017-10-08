@@ -1388,7 +1388,7 @@ static int rmnet_ioctl_extended(struct net_device *dev, struct ifreq *ifr)
 			    sizeof(struct rmnet_ioctl_extended_s));
 
 	if (rc) {
-		DBG("%s(): copy_from_user() failed\n", __func__);
+		DBG(eth_dev, "%s(): copy_from_user() failed\n", __func__);
 		return rc;
 	}
 
@@ -1443,7 +1443,7 @@ static int rmnet_ioctl_extended(struct net_device *dev, struct ifreq *ifr)
 			  sizeof(struct rmnet_ioctl_extended_s));
 
 	if (rc)
-		DBG("%s(): copy_to_user() failed\n", __func__);
+		DBG(eth_dev, "%s(): copy_to_user() failed\n", __func__);
 	return rc;
 }
 

@@ -49,6 +49,7 @@
 #include <linux/mfd/pm8xxx/misc.h>
 #include <linux/mhl_8334.h>
 #include <linux/qpnp/qpnp-adc.h>
+#include <mach/board_lge.h>
 
 #include <linux/msm-bus.h>
 
@@ -110,6 +111,7 @@ static struct regulator *hsusb_vdd;
 static struct regulator *vbus_otg;
 static struct regulator *mhl_usb_hs_switch;
 static struct power_supply *psy;
+static struct power_supply *batt_psy;
 
 static bool aca_id_turned_on;
 static bool legacy_power_supply;
@@ -1719,11 +1721,21 @@ static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 		goto psy_error;
 	}
 
+	if (!batt_psy) {
+		batt_psy = power_supply_get_by_name("battery");
+		if (!batt_psy) {
+			pr_err("battery supply not found\n");
+			goto psy_error;
+		}
+	}
+
 	if (motg->cur_power == 0 && mA > 2) {
 		/* Enable charging */
 		if (power_supply_set_online(psy, true))
 			goto psy_error;
 		if (power_supply_set_current_limit(psy, 1000*mA))
+			goto psy_error;
+		if (power_supply_set_charging_enabled(batt_psy, 1))
 			goto psy_error;
 	} else if (motg->cur_power >= 0 && (mA == 0 || mA == 2)) {
 		/* Disable charging */
@@ -1732,12 +1744,18 @@ static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 		/* Set max current limit in uA */
 		if (power_supply_set_current_limit(psy, 1000*mA))
 			goto psy_error;
+		if (power_supply_set_charging_enabled(batt_psy, 0))
+			goto psy_error;
 	} else {
 		if (power_supply_set_online(psy, true))
 			goto psy_error;
 		/* Current has changed (100/2 --> 500) */
 		if (power_supply_set_current_limit(psy, 1000*mA))
 			goto psy_error;
+#ifdef CONFIG_LGE_PM
+		if (power_supply_set_charging_enabled(batt_psy, 1))
+			goto psy_error;
+#endif
 	}
 
 	power_supply_changed(psy);
@@ -1785,6 +1803,17 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	 */
 	if (motg->online && motg->cur_power == 0 && mA == 0)
 		msm_otg_set_online_status(motg);
+
+	if (mA > 2 && lge_pm_get_cable_type() != NO_INIT_CABLE) {
+		if (motg->chg_type == USB_SDP_CHARGER) {
+			mA = lge_pm_get_usb_current();
+		} else if (motg->chg_type == USB_DCP_CHARGER ||
+				motg->chg_type == USB_PROPRIETARY_CHARGER) {
+			mA = lge_pm_get_ta_current();
+		} else if (motg->chg_type == USB_FLOATED_CHARGER) {
+			mA = lge_pm_get_usb_current();
+		}
+	}
 
 	if (motg->cur_power == mA)
 		return;
@@ -2680,6 +2709,16 @@ static void msm_chg_detect_work(struct work_struct *w)
 	u32 line_state, dm_vlgc;
 	unsigned long delay;
 
+	motg->vadc_dev = qpnp_get_vadc(motg->phy.dev, "phy");
+
+	if (IS_ERR(motg->vadc_dev)) {
+		if (PTR_ERR(motg->vadc_dev) == -EPROBE_DEFER) {
+			queue_delayed_work(system_nrt_wq, &motg->chg_work,
+					msecs_to_jiffies(1000));
+			return;
+		}
+	}
+
 	dev_dbg(phy->dev, "chg detection work\n");
 
 	if (test_bit(MHL, &motg->inputs)) {
@@ -2734,6 +2773,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 		}
 		break;
 	case USB_CHG_STATE_DCD_DONE:
+		lge_pm_read_cable_info(motg->vadc_dev);
 		vout = msm_chg_check_primary_det(motg);
 		line_state = readl_relaxed(USB_PORTSC) & PORTSC_LS;
 		dm_vlgc = line_state & PORTSC_LS_DM;
@@ -2819,7 +2859,11 @@ static void msm_chg_detect_work(struct work_struct *w)
 	queue_delayed_work(system_nrt_wq, &motg->chg_work, delay);
 }
 
+#ifdef CONFIG_USB_G_LGE_ANDROID
+#define VBUS_INIT_TIMEOUT	msecs_to_jiffies(15000)
+#else
 #define VBUS_INIT_TIMEOUT	msecs_to_jiffies(5000)
+#endif
 
 /*
  * We support OTG, Peripheral only and Host only configurations. In case
@@ -2876,8 +2920,13 @@ static void msm_otg_init_sm(struct msm_otg *motg)
 			ret = wait_for_completion_timeout(&pmic_vbus_init,
 							  VBUS_INIT_TIMEOUT);
 			if (!ret) {
+#ifdef CONFIG_USB_G_LGE_ANDROID
+				dev_err(motg->phy.dev, "%s: timeout waiting for PMIC VBUS\n",
+					__func__);
+#else
 				dev_dbg(motg->phy.dev, "%s: timeout waiting for PMIC VBUS\n",
 					__func__);
+#endif
 				clear_bit(B_SESS_VLD, &motg->inputs);
 				pmic_vbus_init.done = 1;
 			}
@@ -3744,11 +3793,11 @@ static void msm_otg_set_vbus_state(int online)
 	static bool init;
 
 	if (online) {
-		pr_debug("PMIC: BSV set\n");
+		pr_info("PMIC: BSV set\n");
 		if (test_and_set_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	} else {
-		pr_debug("PMIC: BSV clear\n");
+		pr_info("PMIC: BSV clear\n");
 		if (!test_and_clear_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	}
@@ -3772,7 +3821,7 @@ static void msm_otg_set_vbus_state(int online)
 			goto out;
 		}
 		complete(&pmic_vbus_init);
-		pr_debug("PMIC: BSV init complete\n");
+		pr_info("PMIC: BSV init complete\n");
 		return;
 	}
 
