@@ -27,6 +27,10 @@
 #include "diag_usb.h"
 #include "diag_memorydevice.h"
 
+#ifdef CONFIG_LGE_DIAG_BYPASS
+#include "lg_diag_bypass.h"
+#endif
+
 struct diag_logger_t *logger;
 static struct diag_logger_t usb_logger;
 static struct diag_logger_t md_logger;
@@ -117,6 +121,12 @@ int diag_mux_write(int proc, unsigned char *buf, int len, int ctx)
 {
 	if (proc < 0 || proc >= NUM_MUX_PROC)
 		return -EINVAL;
+#ifdef CONFIG_LGE_DIAG_BYPASS
+    if(diag_bypass_response(buf, len, proc, ctx, logger) > 0) {
+        return 0;
+    }
+#endif
+
 	if (logger && logger->log_ops && logger->log_ops->write)
 		return logger->log_ops->write(proc, buf, len, ctx);
 	return 0;
