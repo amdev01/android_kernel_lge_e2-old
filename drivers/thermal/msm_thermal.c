@@ -4593,8 +4593,13 @@ static int probe_cc(struct device_node *node, struct msm_thermal_data *data,
 	uint32_t cpu = 0;
 
 	if (num_possible_cpus() > 1) {
+#if 0	/* Restore qualcomm original code for fix stability issue. */
+		core_control_enabled = 0;
+		hotplug_enabled = 0;
+#else
 		core_control_enabled = 1;
 		hotplug_enabled = 1;
+#endif
 	}
 
 	key = "qcom,core-limit-temp";
