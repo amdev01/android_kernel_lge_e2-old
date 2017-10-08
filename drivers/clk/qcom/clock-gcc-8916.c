@@ -908,6 +908,9 @@ static struct rcg_clk jpeg0_clk_src = {
 static struct clk_freq_tbl ftbl_gcc_camss_mclk0_1_clk[] = {
 	F(   9600000,	      xo,   2,	  0,	0),
 	F(  23880000,      gpll0,   1,    2,   67),
+	//                                                                   
+	F(  24000000,      gpll0,   1,    2,   67),
+	//                                                                   
 	F(  66670000,	   gpll0,  12,	  0,	0),
 	F_END
 };
@@ -1056,7 +1059,11 @@ static struct rcg_clk byte0_clk_src = {
 	.c = {
 		.dbg_name = "byte0_clk_src",
 		.ops = &clk_ops_byte,
+#ifdef CONFIG_LGE_PM
+		VDD_DIG_FMAX_MAP2(LOW, 112500000, NOMINAL, 187500000),
+#else
 		VDD_DIG_FMAX_MAP2(LOW, 94400000, NOMINAL, 188500000),
+#endif
 		CLK_INIT(byte0_clk_src.c),
 	},
 };
