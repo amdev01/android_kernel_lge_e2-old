@@ -31,7 +31,6 @@
 #include "venus_boot.h"
 #include "vidc_hfi_api.h"
 
-
 #define BASE_DEVICE_NUMBER 32
 #define EARLY_FIRMWARE_LOAD_DELAY 1000
 

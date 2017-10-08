@@ -2260,15 +2260,15 @@ exit:
 
 static int msm_comm_init_core_done(struct msm_vidc_inst *inst)
 {
-	int rc = 0;
+       int rc = 0;
 
-	rc = msm_comm_check_core_init(inst->core);
-	if (rc) {
-		dprintk(VIDC_ERR, "%s - failed to initialize core\n", __func__);
-		return rc;
-	}
-	change_inst_state(inst, MSM_VIDC_CORE_INIT_DONE);
-	return rc;
+       rc = msm_comm_check_core_init(inst->core);
+       if (rc) {
+               dprintk(VIDC_ERR, "%s - failed to initialize core\n", __func__);
+               return rc;
+       }
+       change_inst_state(inst, MSM_VIDC_CORE_INIT_DONE);
+       return rc;
 }
 
 int msm_comm_load_fw(struct msm_vidc_core *core)
@@ -2344,19 +2344,19 @@ fail_vote_bus:
 
 static int msm_comm_init_core(struct msm_vidc_inst *inst)
 {
-	int rc = 0;
+       int rc = 0;
 
-	if (!inst || !inst->core)
-		return -EINVAL;
+       if (!inst || !inst->core)
+               return -EINVAL;
 
-	rc = msm_comm_load_fw(inst->core);
-	if (rc) {
-		dprintk(VIDC_ERR, "%s - firmware loading failed\n", __func__);
-		return rc;
-	}
+       rc = msm_comm_load_fw(inst->core);
+       if (rc) {
+               dprintk(VIDC_ERR, "%s - firmware loading failed\n", __func__);
+               return rc;
+       }
 
-	change_inst_state(inst, MSM_VIDC_CORE_INIT);
-	return rc;
+       change_inst_state(inst, MSM_VIDC_CORE_INIT);
+       return rc;
 }
 
 static int msm_vidc_deinit_core(struct msm_vidc_inst *inst)
@@ -2384,14 +2384,14 @@ static int msm_vidc_deinit_core(struct msm_vidc_inst *inst)
 
 	mutex_lock(&core->lock);
 
-	/*
-	 * If firmware is configured to be always loaded in memory,
-	 * then unload it only if the core has gone in to bad state.
-	 */
-	if (core->resources.early_fw_load &&
-		core->state != VIDC_CORE_INVALID) {
-			goto core_already_uninited;
-	}
+    /*
+     * If firmware is configured to be always loaded in memory,
+     * then unload it only if the core has gone in to bad state.
+     */
+    if (core->resources.early_fw_load &&
+            core->state != VIDC_CORE_INVALID) {
+                    goto core_already_uninited;
+    }
 
 	if (list_empty(&core->instances)) {
 		cancel_delayed_work(&core->fw_unload_work);
