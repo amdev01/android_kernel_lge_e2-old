@@ -1213,7 +1213,7 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 		}
 	}
 
-	pr_debug("starting fb%d overlay\n", mfd->index);
+	pr_info("starting fb%d overlay\n", mfd->index);
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON);
 
@@ -1688,7 +1688,7 @@ static int __mdss_mdp_overlay_release_all(struct msm_fb_data_type *mfd,
 	u32 unset_ndx = 0;
 	int cnt = 0;
 
-	pr_debug("releasing all resources for fb%d pid=%d\n", mfd->index, pid);
+	pr_info("releasing all resources for fb%d pid=%d\n", mfd->index, pid);
 
 	mutex_lock(&mdp5_data->ov_lock);
 	mutex_lock(&mdp5_data->list_lock);
@@ -1705,7 +1705,7 @@ static int __mdss_mdp_overlay_release_all(struct msm_fb_data_type *mfd,
 		cnt++;
 	}
 
-	pr_debug("release_all=%d mfd->ref_cnt=%d unset_ndx=0x%x cnt=%d\n",
+	pr_info("release_all=%d mfd->ref_cnt=%d unset_ndx=0x%x cnt=%d\n",
 		release_all, mfd->ref_cnt, unset_ndx, cnt);
 
 	mutex_unlock(&mdp5_data->list_lock);

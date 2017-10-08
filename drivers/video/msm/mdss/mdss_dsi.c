@@ -30,6 +30,14 @@
 #include "mdss_debug.h"
 
 #define XO_CLK_RATE	19200000
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+/* For INCELL Knock on, When the device sleep out, DSV GPIO MUST be controled in LOW state */
+/* BUT, when the device is first booting, we DON'T control DSV because of continuous_splash_enable */
+/* is_first_dsv_control FLAG is for SKIPPING the DSV Control when the device first booting */
+/* is_available_dsv_control FLAG is for BLOCKING the DSV GPIO Control except Display  */
+int is_first_dsv_control = 1;
+bool is_available_dsv_control = 0;
+#endif
 
 static int mdss_dsi_pinctrl_set_state(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 					bool active);
@@ -52,6 +60,8 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+  pr_info("%s+:\n", __func__);
+
 	for (i = 0; !rc && (i < DSI_MAX_PM); i++) {
 		rc = msm_dss_config_vreg(&pdev->dev,
 			ctrl_pdata->power_data[i].vreg_config,
@@ -60,6 +70,8 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev)
 			pr_err("%s: failed to init vregs for %s\n",
 				__func__, __mdss_dsi_pm_name(i));
 	}
+
+	pr_info("%s-:\n", __func__);
 
 	return rc;
 }
@@ -75,6 +87,8 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		ret = -EINVAL;
 		goto end;
 	}
+
+  pr_info("%s+:\n", __func__);
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
@@ -113,6 +127,9 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	}
 
 end:
+
+  pr_info("%s-:\n", __func__);
+
 	return ret;
 }
 
@@ -127,8 +144,27 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
+  pr_info("%s+:\n", __func__);
+
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
+
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+		/* For INCELL Knock on, When the device sleep out, DSV GPIO MUST be controled in LOW state */
+		/* BUT, when the device is first booting, we DON'T control DSV because of continuous_splash_enable */
+		/* is_first_dsv_control FLAG is for SKIPPING the DSV Control when the device first booting */
+		if (is_first_dsv_control == 1) {
+			is_first_dsv_control = 0;
+		}
+		else {
+			/* is_available_dsv_control FLAG is for BLOCKING the DSV GPIO Control except Display  */
+			/* After LCD On, DSV control is NOT available like "is_available_dsv_control = 0"  */
+			is_available_dsv_control = 0;
+			pr_err("%s : dsv_control is not allowed after this time. is_available_dsv_control = [%d]\n", __func__, is_available_dsv_control);
+			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+			msleep(5);
+		}
+#endif
 
 	for (i = 0; i < DSI_MAX_PM; i++) {
 		/*
@@ -174,6 +210,14 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 					__func__, ret);
 	}
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+	gpio_direction_output((ctrl_pdata->disp_fd_gpio), 1);
+	gpio_set_value((ctrl_pdata->disp_fd_gpio), 1);
+	pr_info("%s: LCD IOVCC Enable", __func__);
+	gpio_direction_output((ctrl_pdata->disp_iovcc_gpio), 1);
+	gpio_set_value((ctrl_pdata->disp_iovcc_gpio), 1);
+#endif
+
 error:
 	if (ret) {
 		for (; i >= 0; i--)
@@ -181,6 +225,9 @@ error:
 				ctrl_pdata->power_data[i].vreg_config,
 				ctrl_pdata->power_data[i].num_vreg, 0);
 	}
+
+  pr_info("%s-:\n", __func__);
+
 	return ret;
 }
 
@@ -202,7 +249,7 @@ static int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 	}
 
 	pinfo = &pdata->panel_info;
-	pr_debug("%s: cur_power_state=%d req_power_state=%d\n", __func__,
+	pr_info("%s: cur_power_state=%d req_power_state=%d\n", __func__,
 		pinfo->panel_power_state, power_state);
 
 	if (pinfo->panel_power_state == power_state) {
@@ -395,7 +442,7 @@ static int mdss_dsi_get_dt_vreg_data(struct device *dev,
 			mp->vreg_config[i].post_off_sleep = tmp;
 		}
 
-		pr_debug("%s: %s min=%d, max=%d, enable=%d, disable=%d, preonsleep=%d, postonsleep=%d, preoffsleep=%d, postoffsleep=%d\n",
+		pr_info("%s: %s min=%d, max=%d, enable=%d, disable=%d, preonsleep=%d, postonsleep=%d, preoffsleep=%d, postoffsleep=%d\n",
 			__func__,
 			mp->vreg_config[i].vreg_name,
 			mp->vreg_config[i].min_voltage,
@@ -465,7 +512,7 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 	mutex_lock(&ctrl_pdata->mutex);
 	panel_info = &ctrl_pdata->panel_data.panel_info;
 
-	pr_debug("%s+: ctrl=%p ndx=%d power_state=%d\n",
+	pr_info("%s+: ctrl=%p ndx=%d power_state=%d\n",
 		__func__, ctrl_pdata, ctrl_pdata->ndx, power_state);
 
 	if (power_state == panel_info->panel_power_state) {
@@ -506,7 +553,7 @@ panel_power_ctrl:
 
 end:
 	mutex_unlock(&ctrl_pdata->mutex);
-	pr_debug("%s-:\n", __func__);
+	pr_info("%s-:\n", __func__);
 
 	return ret;
 }
@@ -554,7 +601,7 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 				panel_data);
 
 	cur_power_state = pdata->panel_info.panel_power_state;
-	pr_debug("%s+: ctrl=%p ndx=%d cur_power_state=%d\n", __func__,
+	pr_info("%s+: ctrl=%p ndx=%d cur_power_state=%d\n", __func__,
 		ctrl_pdata, ctrl_pdata->ndx, cur_power_state);
 
 	pinfo = &pdata->panel_info;
@@ -610,7 +657,7 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
 
 end:
-	pr_debug("%s-:\n", __func__);
+	pr_info("%s-:\n", __func__);
 	return 0;
 }
 
@@ -682,7 +729,7 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 				panel_data);
 	mipi  = &pdata->panel_info.mipi;
 
-	pr_debug("%s+: ctrl=%p ndx=%d cur_blank_state=%d\n", __func__,
+	pr_info("%s+: ctrl=%p ndx=%d cur_blank_state=%d\n", __func__,
 		ctrl_pdata, ctrl_pdata->ndx, pdata->panel_info.blank_state);
 
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
@@ -715,7 +762,7 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 
 error:
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
-	pr_debug("%s-:\n", __func__);
+	pr_info("%s-:\n", __func__);
 
 	return ret;
 }
@@ -735,7 +782,7 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 				panel_data);
 	mipi = &pdata->panel_info.mipi;
 
-	pr_debug("%s+: ctrl=%p ndx=%d power_state=%d\n",
+	pr_info("%s+: ctrl=%p ndx=%d power_state=%d\n",
 		__func__, ctrl_pdata, ctrl_pdata->ndx, power_state);
 
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
@@ -789,7 +836,7 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 
 error:
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
-	pr_debug("%s-:End\n", __func__);
+	pr_info("%s-:End\n", __func__);
 	return ret;
 }
 
@@ -819,7 +866,7 @@ int mdss_dsi_cont_splash_on(struct mdss_panel_data *pdata)
 
 	mdss_dsi_ctrl_setup(ctrl_pdata);
 	mdss_dsi_sw_reset(ctrl_pdata, true);
-	pr_debug("%s-:End\n", __func__);
+	pr_info("%s-:End\n", __func__);
 	return ret;
 }
 
@@ -1195,7 +1242,7 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 	}
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
-	pr_debug("%s+: ctrl=%d event=%d\n", __func__, ctrl_pdata->ndx, event);
+	pr_info("%s+: ctrl=%d event=%d\n", __func__, ctrl_pdata->ndx, event);
 
 	MDSS_XLOG(event, arg, ctrl_pdata->ndx, 0x3333);
 
@@ -1273,7 +1320,7 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		pr_debug("%s: unhandled event=%d\n", __func__, event);
 		break;
 	}
-	pr_debug("%s-:event=%d, rc=%d\n", __func__, event, rc);
+	pr_info("%s-:event=%d, rc=%d\n", __func__, event, rc);
 	return rc;
 }
 
@@ -1514,7 +1561,7 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 		}
 		disable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
 	}
-	pr_debug("%s: Dsi Ctrl->%d initialized\n", __func__, index);
+	pr_info("%s: Dsi Ctrl->%d initialized\n", __func__, index);
 	return 0;
 
 error_pan_node:
@@ -1806,6 +1853,58 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		ctrl_pdata->mode_gpio = -EINVAL;
 	}
 
+#if defined(CONFIG_LGD_INCELL_VIDEO_WVGA_PT_PANEL)
+  ctrl_pdata->disp_fd_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-fd-gpio", 0);
+
+	if (!gpio_is_valid(ctrl_pdata->disp_fd_gpio))
+		pr_err("%s:%d, Disp_fd gpio not specified\n",
+						__func__, __LINE__);
+
+	ctrl_pdata->disp_iovcc_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-iovcc-gpio", 0);
+
+	if (!gpio_is_valid(ctrl_pdata->disp_iovcc_gpio))
+		pr_err("%s:%d, Disp_iovcc gpio not specified\n",
+						__func__, __LINE__);
+
+  #if 0
+  if(pinfo->cont_splash_enabled) {
+    if(gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+      rc = gpio_request(ctrl_pdata->disp_en_gpio, "disp_enable");
+      if (rc) {
+        pr_err("request reset gpio failed, rc=%d\n", rc);
+      }
+      gpio_direction_output((ctrl_pdata->disp_en_gpio), 1);
+    }
+
+    if(gpio_is_valid(ctrl_pdata->rst_gpio)) {
+      rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
+      if (rc) {
+        pr_err("request reset gpio failed, rc=%d\n", rc);
+      }
+      gpio_direction_output((ctrl_pdata->rst_gpio), 1);
+    }
+
+    if(gpio_is_valid(ctrl_pdata->disp_fd_gpio)) {
+      rc = gpio_request(ctrl_pdata->disp_fd_gpio, "fd_enable");
+      if (rc) {
+        pr_err("request reset gpio failed, rc=%d\n", rc);
+      }
+      gpio_direction_output((ctrl_pdata->disp_fd_gpio), 1);
+    }
+
+    if(gpio_is_valid(ctrl_pdata->disp_iovcc_gpio)) {
+      rc = gpio_request(ctrl_pdata->disp_iovcc_gpio, "disp_iovcc_en");
+      if (rc) {
+        pr_err("request reset gpio failed, rc=%d\n", rc);
+      }
+      gpio_direction_output((ctrl_pdata->disp_iovcc_gpio), 1);
+    }
+  }
+  #endif
+#endif
+
 	ctrl_pdata->timing_db_mode = of_property_read_bool(
 		ctrl_pdev->dev.of_node, "qcom,timing-db-mode");
 
@@ -1925,7 +2024,7 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		ctrl_pdata->ndx = 1;
 	}
 
-	pr_debug("%s: Panel data initialized\n", __func__);
+	pr_info("%s: Panel data initialized\n", __func__);
 	return 0;
 }
 
